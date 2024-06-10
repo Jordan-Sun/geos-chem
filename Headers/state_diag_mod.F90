@@ -669,6 +669,12 @@ MODULE State_Diag_Mod
      REAL(f4),           POINTER :: KppSmDecomps(:,:,:)
      LOGICAL                     :: Archive_KppSmDecomps
 
+     REAL(f4),           POINTER :: KppRank(:,:,:)
+     LOGICAL                     :: Archive_KppRank
+
+     REAL(f4),           POINTER :: KppIndexOnRank(:,:,:)
+     LOGICAL                     :: Archive_KppIndexOnRank
+
      !%%%%% KPP auto-reduce solver diagnostics %%%%%
      REAL(f4),           POINTER :: KppAutoReducerNVAR(:,:,:)
      LOGICAL                     :: Archive_KppAutoReducerNVAR
@@ -1894,6 +1900,12 @@ CONTAINS
 
     State_Diag%KppSmDecomps                        => NULL()
     State_Diag%Archive_KppSmDecomps                = .FALSE.
+
+    State_Diag%KppRank                        => NULL()
+    State_Diag%Archive_KppRank                = .FALSE.
+
+    State_Diag%KppIndexOnRank                        => NULL()
+    State_Diag%Archive_KppIndexOnRank                = .FALSE.
 
     State_Diag%KppAutoReducerNVAR                  => NULL()
     State_Diag%Archive_KppAutoReducerNVAR          = .FALSE.
@@ -5997,6 +6009,50 @@ CONTAINS
        ENDIF
 
        !-------------------------------------------------------------------
+       ! KPP rank of column
+       !-------------------------------------------------------------------
+       diagID  = 'KppRank'
+       CALL Init_and_Register(                                               &
+            Input_Opt      = Input_Opt,                                      &
+            State_Chm      = State_Chm,                                      &
+            State_Diag     = State_Diag,                                     &
+            State_Grid     = State_Grid,                                     &
+            DiagList       = Diag_List,                                      &
+            TaggedDiagList = TaggedDiag_List,                                &
+            Ptr2Data       = State_Diag%KppRank,                             &
+            archiveData    = State_Diag%Archive_KppRank,                     &
+            diagId         = diagId,                                         &
+            RC             = RC                                             )
+
+       IF ( RC /= GC_SUCCESS ) THEN
+          errMsg = TRIM( errMsg_ir ) // TRIM( diagId )
+          CALL GC_Error( errMsg, RC, thisLoc )
+          RETURN
+       ENDIF
+
+       !-------------------------------------------------------------------
+       ! KPP index of column on rank
+       !-------------------------------------------------------------------
+       diagID  = 'KppIndexOnRank'
+       CALL Init_and_Register(                                               &
+            Input_Opt      = Input_Opt,                                      &
+            State_Chm      = State_Chm,                                      &
+            State_Diag     = State_Diag,                                     &
+            State_Grid     = State_Grid,                                     &
+            DiagList       = Diag_List,                                      &
+            TaggedDiagList = TaggedDiag_List,                                &
+            Ptr2Data       = State_Diag%KppIndexOnRank,                      &
+            archiveData    = State_Diag%Archive_KppIndexOnRank,              &
+            diagId         = diagId,                                         &
+            RC             = RC                                             )
+
+       IF ( RC /= GC_SUCCESS ) THEN
+          errMsg = TRIM( errMsg_ir ) // TRIM( diagId )
+          CALL GC_Error( errMsg, RC, thisLoc )
+          RETURN
+       ENDIF
+
+       !-------------------------------------------------------------------
        ! AR only -- Number of species in reduced mechanism (NVAR - NRMV)
        !-------------------------------------------------------------------
        diagID = 'KppAutoReducerNVAR'
@@ -6200,6 +6256,10 @@ CONTAINS
                 diagID = 'KppAutoReduceThres'
              CASE( 39 )
                 diagID = 'RxnConst'
+             CASE( 40 )
+                diagID = 'KppRank'
+             CASE( 41 )
+                diagID = 'KppIndexOnRank'
           END SELECT
 
           ! Exit if any of the above are in the diagnostic list
@@ -10460,6 +10520,8 @@ CONTAINS
                                     State_Diag%Archive_KppLuDecomps       .or. &
                                     State_Diag%Archive_KppSubsts          .or. &
                                     State_Diag%Archive_KppSmDecomps       .or. &
+                                    State_Diag%Archive_KppRank            .or. &
+                                    State_Diag%Archive_KppIndexOnRank     .or. &
                                     State_Diag%Archive_KppAutoReducerNVAR .or. &
                                     State_Diag%Archive_KppAutoReduceThres .or. &
                                     State_Diag%Archive_KppcNONZERO        .or. &
@@ -11890,6 +11952,16 @@ CONTAINS
 
     CALL Finalize( diagId   = 'KppSmDecomps',                                &
                    Ptr2Data = State_Diag%KppSmDecomps,                       &
+                   RC       = RC                                            )
+    IF ( RC /= GC_SUCCESS ) RETURN
+
+    CALL Finalize( diagId   = 'KppRank',                                     &
+                   Ptr2Data = State_Diag%KppRank,                            &
+                   RC       = RC                                            )
+    IF ( RC /= GC_SUCCESS ) RETURN
+
+    CALL Finalize( diagId   = 'KppIndexOnRank',                              &
+                   Ptr2Data = State_Diag%KppIndexOnRank,                     &
                    RC       = RC                                            )
     IF ( RC /= GC_SUCCESS ) RETURN
 
@@ -13558,6 +13630,16 @@ CONTAINS
        IF ( isRank    ) Rank  =  3
 
     ELSE IF ( TRIM( Name_AllCaps ) == 'KPPSMDECOMPS' ) THEN
+       IF ( isDesc    ) Desc  = 'KPP rank of column'
+       IF ( isUnits   ) Units = 'count'
+       IF ( isRank    ) Rank  =  3
+
+    ELSE IF ( TRIM( Name_AllCaps ) == 'KPPRANK' ) THEN
+       IF ( isDesc    ) Desc  = 'KPP index of column on rank'
+       IF ( isUnits   ) Units = 'count'
+       IF ( isRank    ) Rank  =  3
+
+    ELSE IF ( TRIM( Name_AllCaps ) == 'KPPINDEXONRANK' ) THEN
        IF ( isDesc    ) Desc  = 'Number of KPP singular matrix decompositions'
        IF ( isUnits   ) Units = 'count'
        IF ( isRank    ) Rank  =  3
