@@ -88,6 +88,8 @@ MODULE FullChem_Mod
   REAL(fP), ALLOCATABLE  :: RCNTRL_balanced(:,:)
   INTEGER,  ALLOCATABLE  :: ISTATUS_balanced(:,:)
   REAL(fP), ALLOCATABLE  :: RSTATE_balanced(:,:)
+  ! For now - just hard coded
+  INTEGER, DIMENSION(3)  :: swap_indices = (/1, 2, 20/)
 
 CONTAINS
 !EOC
@@ -1120,20 +1122,15 @@ CONTAINS
     Call MPI_Isend(RCNTRL_1D(1,1),NCELL_local*20,MPI_DOUBLE_PRECISION,next_PET,0,Input_Opt%mpiComm,request,RC)
     Call MPI_Recv(RCNTRL_balanced(1,1),NCELL_balanced*20,MPI_DOUBLE_PRECISION,prev_PET,0,Input_Opt%mpiComm,MPI_STATUS_IGNORE,RC)
 
+    ! Indices to be swapped
     ! Swap the columns manually
     do I_CELL = 1, State_Grid%NZ
-        C_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1) = C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1)
-        RCONST_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1) = RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1)
-        ICNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1) = ICNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1)
-        RCNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1) = RCNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1)
-        C_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2) = C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2)
-        RCONST_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2) = RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2)
-        ICNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2) = ICNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2)
-        RCNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2) = RCNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2)
-        C_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20) = C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20)
-        RCONST_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20) = RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20)
-        ICNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20) = ICNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20)
-        RCNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20) = RCNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20)
+        do i = 1, size(indices)
+            C_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
+            RCONST_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
+            ICNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = ICNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
+            RCNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = RCNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
+        end do
     end do
 #endif
 
@@ -1347,18 +1344,12 @@ CONTAINS
 
     ! Swap back manually
     do I_CELL = 1, State_Grid%NZ
-        C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1) = C_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1)
-        RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1) = RCONST_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1)
-        RSTATE_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1) = RSTATE_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1)
-        ISTATUS_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1) = ISTATUS_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1)
-        C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2) = C_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2)
-        RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2) = RCONST_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2)
-        RSTATE_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2) = RSTATE_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2)
-        ISTATUS_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2) = ISTATUS_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2)
-        C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20) = C_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20)
-        RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20) = RCONST_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20)
-        RSTATE_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20) = RSTATE_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20)
-        ISTATUS_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20) = ISTATUS_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20)
+        do i = 1, size(swap_indices)
+            C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = C_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
+            RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = RCONST_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
+            RSTATE_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = RSTATE_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
+            ISTATUS_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = ISTATUS_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
+        end do
     end do
 #endif
     
