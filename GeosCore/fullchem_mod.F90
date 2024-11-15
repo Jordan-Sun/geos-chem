@@ -1119,6 +1119,22 @@ CONTAINS
     Call MPI_Recv(ICNTRL_balanced(1,1),NCELL_balanced*20,MPI_INTEGER,prev_PET,0,Input_Opt%mpiComm,MPI_STATUS_IGNORE,RC)
     Call MPI_Isend(RCNTRL_1D(1,1),NCELL_local*20,MPI_DOUBLE_PRECISION,next_PET,0,Input_Opt%mpiComm,request,RC)
     Call MPI_Recv(RCNTRL_balanced(1,1),NCELL_balanced*20,MPI_DOUBLE_PRECISION,prev_PET,0,Input_Opt%mpiComm,MPI_STATUS_IGNORE,RC)
+
+    ! Swap the columns manually
+    do I_CELL = 1, State_Grid%NZ
+        C_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1) = C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1)
+        RCONST_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1) = RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1)
+        ICNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1) = ICNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1)
+        RCNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1) = RCNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1)
+        C_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2) = C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2)
+        RCONST_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2) = RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2)
+        ICNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2) = ICNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2)
+        RCNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2) = RCNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2)
+        C_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20) = C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20)
+        RCONST_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20) = RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20)
+        ICNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20) = ICNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20)
+        RCNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20) = RCNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20)
+    end do
 #endif
 
     !$OMP PARALLEL DO                                                        &
@@ -1328,6 +1344,22 @@ CONTAINS
     Call MPI_Recv(RSTATE_1D(1,1),NCELL_balanced*20,MPI_DOUBLE_PRECISION,next_PET,0,Input_Opt%mpiComm,MPI_STATUS_IGNORE,RC)
     Call MPI_Isend(RCONST_balanced(1,1),NCELL_balanced*NREACT,MPI_DOUBLE_PRECISION,prev_PET,0,Input_Opt%mpiComm,request,RC)
     Call MPI_Recv(RCONST_1D(1,1),NCELL_local*NREACT,MPI_DOUBLE_PRECISION,next_PET,0,Input_Opt%mpiComm,MPI_STATUS_IGNORE,RC)
+
+    ! Swap back manually
+    do I_CELL = 1, State_Grid%NZ
+        C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1) = C_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1)
+        RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1) = RCONST_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1)
+        RSTATE_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1) = RSTATE_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1)
+        ISTATUS_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1) = ISTATUS_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+1)
+        C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2) = C_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2)
+        RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2) = RCONST_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2)
+        RSTATE_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2) = RSTATE_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2)
+        ISTATUS_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2) = ISTATUS_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+2)
+        C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20) = C_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20)
+        RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20) = RCONST_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20)
+        RSTATE_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20) = RSTATE_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20)
+        ISTATUS_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20) = ISTATUS_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+20)
+    end do
 #endif
     
     DO L = 1, State_Grid%NZ
