@@ -88,8 +88,7 @@ MODULE FullChem_Mod
   REAL(fP), ALLOCATABLE  :: RCNTRL_balanced(:,:)
   INTEGER,  ALLOCATABLE  :: ISTATUS_balanced(:,:)
   REAL(fP), ALLOCATABLE  :: RSTATE_balanced(:,:)
-  ! For now - just hard coded
-  INTEGER, DIMENSION(3)  :: swap_indices = (/1, 2, 20/)
+  INTEGER,  ALLOCATABLE  :: swap_indices(:)
 
 CONTAINS
 !EOC
@@ -1122,10 +1121,11 @@ CONTAINS
     Call MPI_Isend(RCNTRL_1D(1,1),NCELL_local*20,MPI_DOUBLE_PRECISION,next_PET,0,Input_Opt%mpiComm,request,RC)
     Call MPI_Recv(RCNTRL_balanced(1,1),NCELL_balanced*20,MPI_DOUBLE_PRECISION,prev_PET,0,Input_Opt%mpiComm,MPI_STATUS_IGNORE,RC)
 
-    ! Indices to be swapped
     ! Swap the columns manually
     do I_CELL = 1, State_Grid%NZ
         do i = 1, size(swap_indices)
+            ! Reaching 0 means we have reached the end of the array
+            if (swap_indices(i) == 0) exit
             C_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
             RCONST_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
             ICNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = ICNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
@@ -1345,6 +1345,8 @@ CONTAINS
     ! Swap back manually
     do I_CELL = 1, State_Grid%NZ
         do i = 1, size(swap_indices)
+            ! Reaching 0 means we have reached the end of the array
+            if (swap_indices(i) == 0) exit
             C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = C_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
             RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = RCONST_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
             RSTATE_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = RSTATE_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
@@ -3030,6 +3032,15 @@ CONTAINS
         CALL GC_Error( 'Failed to allocate RSTATE_balanced', RC, ThisLoc )
         RETURN
     End If
+    Allocate(swap_indices (NCELL_max) , STAT=RC)
+    CALL GC_CheckVar( 'fullchem_mod.F90:swap_indices', 0, RC )
+    IF ( RC /= GC_SUCCESS ) Then
+        CALL GC_Error( 'Failed to allocate swap_indices', RC, ThisLoc )
+        RETURN
+    End If
+    ! Indices to be swapped
+    swap_indices = 0  ! Initialize all elements to 0
+    swap_indices(1:3) = (/1, 2, 20/)
 
   END SUBROUTINE Init_FullChem
 !EOC
@@ -3181,6 +3192,13 @@ CONTAINS
     If ( ALLOCATED( RSTATE_balanced ) ) Then
        Deallocate(RSTATE_balanced, STAT=RC)
        CALL GC_CheckVar( 'fullchem_mod.F90:RSTATE_balanced', 2, RC )
+       IF ( RC /= GC_SUCCESS ) RETURN
+    ENDIF
+
+
+    If ( ALLOCATED( swap_indices ) ) Then
+       Deallocate(swap_indices, STAT=RC)
+       CALL GC_CheckVar( 'fullchem_mod.F90:swap_indices', 2, RC )
        IF ( RC /= GC_SUCCESS ) RETURN
     ENDIF
 
