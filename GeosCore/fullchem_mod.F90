@@ -1145,10 +1145,10 @@ CONTAINS
     Call MPI_Recv(RCNTRL_recv(1,1),NCELL_moving*20,MPI_DOUBLE_PRECISION,prev_PET,0,Input_Opt%mpiComm,MPI_STATUS_IGNORE,RC)
 
     ! Copy c_1d to c_balanced
-    C_balanced = C_1D
-    RCONST_balanced = RCONST_1D
-    ICNTRL_balanced = ICNTRL_1D
-    RCNTRL_balanced = RCNTRL_1D
+    C_balanced(:, :) = C_1D(:, :)
+    RCONST_balanced(:, :) = RCONST_1D(:, :)
+    ICNTRL_balanced(:, :) = ICNTRL_1D(:, :)
+    RCNTRL_balanced(:, :) = RCNTRL_1D(:, :)
 
     ! Unpack the columns from the *_recv arrays
     do I_CELL = 1, State_Grid%NZ
@@ -1379,7 +1379,10 @@ CONTAINS
     Call MPI_Recv(RCNTRL_recv(1,1),NCELL_moving*20,MPI_DOUBLE_PRECISION,prev_PET,0,Input_Opt%mpiComm,MPI_STATUS_IGNORE,RC)
 
     ! Copy c_balanced to c_1d
-    C_1D = C_balanced
+    C_1D(:,:) = C_balanced(:,:)
+    RCONST_1D(:,:) = RCONST_balanced(:,:)
+    ICNTRL_1D(:,:) = ICNTRL_balanced(:,:)
+    RCNTRL_1D(:,:) = RCNTRL_balanced(:,:)
 
     ! Unpack the columns from the *_recv arrays
     do I_CELL = 1, State_Grid%NZ
