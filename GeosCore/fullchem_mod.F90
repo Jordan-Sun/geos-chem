@@ -1161,9 +1161,12 @@ CONTAINS
             RCNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = RCNTRL_send(:,(I_CELL-1)*NCELL_moving+i)
         end do
     end do
-
-    ! @Debug: Print out a copy of load-balanced data (C_balanced) with PET number
-    WRITE(*,*) 'Load-balanced data on PET ', this_PET, ': ', C_balanced(:, :)
+    
+    ! @Debug: Print out a copy of load-balanced data (C_balanced) a file named PET_<PET>.txt
+    IF (this_PET == 0) THEN
+        WRITE(10,*) 'Load-balanced data on PET ', this_PET, ': '
+        WRITE(10,*) C_balanced(:,:)
+    ENDIF
 #endif
 
     !$OMP PARALLEL DO                                                        &
@@ -1403,8 +1406,11 @@ CONTAINS
         end do
     end do
 
-    ! @Debug: Print out a copy of reversed data (C_1D) with PET number
-    WRITE(*,*) 'Reversed data on PET ', this_PET, ': ', C_1D(:, :)
+    ! @Debug: Print out a copy of reversed data (C_1D) with PET number to a file named PET_<PET>.txt
+    IF (this_PET == 0) THEN
+        WRITE(10,*) 'Reversed data on PET ', this_PET, ': '
+        WRITE(10,*) C_1D(:, :)
+    ENDIF
 #endif
     
     DO L = 1, State_Grid%NZ
@@ -3148,6 +3154,11 @@ CONTAINS
     end do
     NCELL_moving = NCELL_moving - 1  ! Length of swap_indices
 
+    ! Open the PET_0.txt file for writing only if this is PET 0
+    IF (Input_Opt%thisCPU == 0) THEN
+        OPEN(UNIT=10, FILE='PET_0.txt', STATUS='REPLACE', ACTION='WRITE')
+    ENDIF
+
   END SUBROUTINE Init_FullChem
 !EOC
 !------------------------------------------------------------------------------
@@ -3355,6 +3366,9 @@ CONTAINS
        CALL GC_CheckVar( 'fullchem_mod.F90:swap_indices', 2, RC )
        IF ( RC /= GC_SUCCESS ) RETURN
     ENDIF
+
+    ! Close the PET_0.txt file, it won't have any effect if it is not open
+    CLOSE(UNIT=10)
 
   END SUBROUTINE Cleanup_FullChem
 !EOC
