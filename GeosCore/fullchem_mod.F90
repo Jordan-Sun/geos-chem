@@ -1124,10 +1124,10 @@ CONTAINS
     ! Gather the columns to be swapped to the *_recv arrays
     do I_CELL = 1, State_Grid%NZ
         do i = 1, NCELL_moving
-            C_recv(:,i) = C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
-            RCONST_recv(:,i) = RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
-            ICNTRL_recv(:,i) = ICNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
-            RCNTRL_recv(:,i) = RCNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
+            C_recv(:,(I_CELL-1)*NCELL_moving+i) = C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
+            RCONST_recv(:,(I_CELL-1)*NCELL_moving+i) = RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
+            ICNTRL_recv(:,(I_CELL-1)*NCELL_moving+i) = ICNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
+            RCNTRL_recv(:,(I_CELL-1)*NCELL_moving+i) = RCNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
         end do
     end do
 
@@ -1151,10 +1151,10 @@ CONTAINS
     ! Unpack the columns from the *_send arrays
     do I_CELL = 1, State_Grid%NZ
         do i = 1, NCELL_moving
-            C_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = C_send(:,i)
-            RCONST_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = RCONST_send(:,i)
-            ICNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = ICNTRL_send(:,i)
-            RCNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = RCNTRL_send(:,i)
+            C_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = C_send(:,(I_CELL-1)*NCELL_moving+i)
+            RCONST_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = RCONST_send(:,(I_CELL-1)*NCELL_moving+i)
+            ICNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = ICNTRL_send(:,(I_CELL-1)*NCELL_moving+i)
+            RCNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = RCNTRL_send(:,(I_CELL-1)*NCELL_moving+i)
         end do
     end do
 #endif
@@ -1359,10 +1359,10 @@ CONTAINS
     ! Gather the columns to be swapped to the *_send arrays
     do I_CELL = 1, State_Grid%NZ
         do i = 1, NCELL_moving
-            C_send(:,i) = C_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
-            RCONST_send(:,i) = RCONST_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
-            ICNTRL_send(:,i) = ICNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
-            RCNTRL_send(:,i) = RCNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
+            C_send(:,(I_CELL-1)*NCELL_moving+i) = C_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
+            RCONST_send(:,(I_CELL-1)*NCELL_moving+i) = RCONST_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
+            ICNTRL_send(:,(I_CELL-1)*NCELL_moving+i) = ICNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
+            RCNTRL_send(:,(I_CELL-1)*NCELL_moving+i) = RCNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
         end do
     end do
 
@@ -1385,10 +1385,10 @@ CONTAINS
     ! Unpack the columns from the *_recv arrays
     do I_CELL = 1, State_Grid%NZ
         do i = 1, NCELL_moving
-            C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = C_recv(:,i)
-            RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = RCONST_recv(:,i)
-            ICNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = ICNTRL_recv(:,i)
-            RCNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = RCNTRL_recv(:,i)
+            C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = C_recv(:,(I_CELL-1)*NCELL_moving+i)
+            RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = RCONST_recv(:,(I_CELL-1)*NCELL_moving+i)
+            ICNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = ICNTRL_recv(:,(I_CELL-1)*NCELL_moving+i)
+            RCNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = RCNTRL_recv(:,(I_CELL-1)*NCELL_moving+i)
         end do
     end do
 #endif
