@@ -1161,6 +1161,9 @@ CONTAINS
             RCNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = RCNTRL_send(:,(I_CELL-1)*NCELL_moving+i)
         end do
     end do
+
+    ! @Debug: Print out a copy of load-balanced data (C_balanced) with PET number
+    WRITE(*,*) 'Load-balanced data on PET ', this_PET, ': ', C_balanced(:, :)
 #endif
 
     !$OMP PARALLEL DO                                                        &
@@ -1399,6 +1402,9 @@ CONTAINS
             RCNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = RCNTRL_recv(:,(I_CELL-1)*NCELL_moving+i)
         end do
     end do
+
+    ! @Debug: Print out a copy of reversed data (C_1D) with PET number
+    WRITE(*,*) 'Reversed data on PET ', this_PET, ': ', C_1D(:, :)
 #endif
     
     DO L = 1, State_Grid%NZ
