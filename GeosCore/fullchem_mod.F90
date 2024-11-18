@@ -1158,7 +1158,6 @@ CONTAINS
         end do
     end do
 #endif
-#endif
 
     !$OMP PARALLEL DO                                                        &
     !$OMP DEFAULT( SHARED                                                   )&
