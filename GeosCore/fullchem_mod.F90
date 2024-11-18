@@ -1121,28 +1121,26 @@ CONTAINS
         prev_PET = this_PET - 1
     endif
     
-    ! Gather the columns to be swapped to the *_send arrays
+    ! Gather the columns to be swapped to the *_recv arrays
     do I_CELL = 1, State_Grid%NZ
         do i = 1, NCELL_moving
-            C_send(:,i) = C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
-            RCONST_send(:,i) = RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
-            ICNTRL_send(:,i) = ICNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
-            RCNTRL_send(:,i) = RCNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
+            C_recv(:,i) = C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
+            RCONST_recv(:,i) = RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
+            ICNTRL_recv(:,i) = ICNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
+            RCNTRL_recv(:,i) = RCNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
         end do
     end do
 
     ! How many cells are to be processed? => Fixed number that is NCELL_moving
-    ! Call MPI_Isend(NCELL_moving,1,MPI_INTEGER,next_PET,0,Input_Opt%mpiComm,request,RC)
-    ! Call MPI_Recv(NCELL_balanced,1,MPI_INTEGER,prev_PET,0,Input_Opt%mpiComm,MPI_STATUS_IGNORE,RC)
     ! Pass the actual data
-    Call MPI_Isend(C_send(1,1),NCELL_moving*NSPEC,MPI_DOUBLE_PRECISION,next_PET,0,Input_Opt%mpiComm,request,RC)
-    Call MPI_Recv(C_recv(1,1),NCELL_moving*NSPEC,MPI_DOUBLE_PRECISION,prev_PET,0,Input_Opt%mpiComm,MPI_STATUS_IGNORE,RC)
-    Call MPI_Isend(RCONST_send(1,1),NCELL_moving*NREACT,MPI_DOUBLE_PRECISION,next_PET,0,Input_Opt%mpiComm,request,RC)
-    Call MPI_Recv(RCONST_recv(1,1),NCELL_moving*NREACT,MPI_DOUBLE_PRECISION,prev_PET,0,Input_Opt%mpiComm,MPI_STATUS_IGNORE,RC)
-    Call MPI_Isend(ICNTRL_send(1,1),NCELL_moving*20,MPI_INTEGER,next_PET,0,Input_Opt%mpiComm,request,RC)
-    Call MPI_Recv(ICNTRL_recv(1,1),NCELL_moving*20,MPI_INTEGER,prev_PET,0,Input_Opt%mpiComm,MPI_STATUS_IGNORE,RC)
-    Call MPI_Isend(RCNTRL_send(1,1),NCELL_moving*20,MPI_DOUBLE_PRECISION,next_PET,0,Input_Opt%mpiComm,request,RC)
-    Call MPI_Recv(RCNTRL_recv(1,1),NCELL_moving*20,MPI_DOUBLE_PRECISION,prev_PET,0,Input_Opt%mpiComm,MPI_STATUS_IGNORE,RC)
+    Call MPI_Isend(C_recv(1,1),NCELL_moving*NSPEC,MPI_DOUBLE_PRECISION,next_PET,0,Input_Opt%mpiComm,request,RC)
+    Call MPI_Recv(C_send(1,1),NCELL_moving*NSPEC,MPI_DOUBLE_PRECISION,prev_PET,0,Input_Opt%mpiComm,MPI_STATUS_IGNORE,RC)
+    Call MPI_Isend(RCONST_recv(1,1),NCELL_moving*NREACT,MPI_DOUBLE_PRECISION,next_PET,0,Input_Opt%mpiComm,request,RC)
+    Call MPI_Recv(RCONST_send(1,1),NCELL_moving*NREACT,MPI_DOUBLE_PRECISION,prev_PET,0,Input_Opt%mpiComm,MPI_STATUS_IGNORE,RC)
+    Call MPI_Isend(ICNTRL_recv(1,1),NCELL_moving*20,MPI_INTEGER,next_PET,0,Input_Opt%mpiComm,request,RC)
+    Call MPI_Recv(ICNTRL_send(1,1),NCELL_moving*20,MPI_INTEGER,prev_PET,0,Input_Opt%mpiComm,MPI_STATUS_IGNORE,RC)
+    Call MPI_Isend(RCNTRL_recv(1,1),NCELL_moving*20,MPI_DOUBLE_PRECISION,next_PET,0,Input_Opt%mpiComm,request,RC)
+    Call MPI_Recv(RCNTRL_send(1,1),NCELL_moving*20,MPI_DOUBLE_PRECISION,prev_PET,0,Input_Opt%mpiComm,MPI_STATUS_IGNORE,RC)
 
     ! Copy c_1d to c_balanced
     C_balanced(:, :) = C_1D(:, :)
@@ -1150,15 +1148,16 @@ CONTAINS
     ICNTRL_balanced(:, :) = ICNTRL_1D(:, :)
     RCNTRL_balanced(:, :) = RCNTRL_1D(:, :)
 
-    ! Unpack the columns from the *_recv arrays
+    ! Unpack the columns from the *_send arrays
     do I_CELL = 1, State_Grid%NZ
         do i = 1, NCELL_moving
-            C_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = C_recv(:,i)
-            RCONST_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = RCONST_recv(:,i)
-            ICNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = ICNTRL_recv(:,i)
-            RCNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = RCNTRL_recv(:,i)
+            C_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = C_send(:,i)
+            RCONST_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = RCONST_send(:,i)
+            ICNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = ICNTRL_send(:,i)
+            RCNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = RCNTRL_send(:,i)
         end do
     end do
+#endif
 #endif
 
     !$OMP PARALLEL DO                                                        &
