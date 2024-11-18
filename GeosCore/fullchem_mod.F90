@@ -3120,7 +3120,7 @@ CONTAINS
         CALL GC_Error( 'Failed to allocate RSTATE_balanced', RC, ThisLoc )
         RETURN
     End If
-    Allocate(swap_indices (NCELL_max / 72) , STAT=RC)
+    Allocate(swap_indices (State_Grid%NX * State_Grid%NY) , STAT=RC)
     CALL GC_CheckVar( 'fullchem_mod.F90:swap_indices', 0, RC )
     IF ( RC /= GC_SUCCESS ) Then
         CALL GC_Error( 'Failed to allocate swap_indices', RC, ThisLoc )
@@ -3129,9 +3129,9 @@ CONTAINS
 
     ! Indices to be swapped (for testing load balancing)
     NCELL_moving = 1
-    do i = 1, NCELL_max / 72
-        if (i == 1 .or. i == 2 .or. i == 20) cycle
-        swap_indices(NCELL_moving) = i
+    do N = 1, State_Grid%NX * State_Grid%NY
+        if (N == 1 .or. N == 2 .or. N == 20) cycle
+        swap_indices(NCELL_moving) = N
         NCELL_moving = NCELL_moving + 1
     end do
     NCELL_moving = NCELL_moving - 1  ! Length of swap_indices
