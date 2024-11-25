@@ -1366,10 +1366,10 @@ CONTAINS
 
     ! Reverse the load balancing
 #ifdef MODEL_GCHPCTM
-    ! @Debug: Print out a copy of computed data (C_1D) with PET number to a file named PET_<PET>.txt
+    ! @Debug: Print out a copy of computed data (C_balanced) with PET number to a file named PET_<PET>.txt
     IF (this_PET == 0) THEN
         WRITE(10,*) 'Computed data on PET ', this_PET, ': '
-        WRITE(10,*) C_1D(:, :)
+        WRITE(10,*) C_balanced(:, :)
     ENDIF
 
     ! Gather the columns to be swapped to the *_recv arrays
