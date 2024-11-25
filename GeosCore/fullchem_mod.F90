@@ -1161,12 +1161,6 @@ CONTAINS
             RCNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = RCNTRL_recv(:,(I_CELL-1)*NCELL_moving+i)
         end do
     end do
-    
-    ! @Debug: Print out a copy of load-balanced data (C_balanced) a file named PET_<PET>.txt
-    IF (this_PET == Input_Opt%numCPUs - 1) THEN
-        WRITE(10,*) 'Load-balanced data on PET ', this_PET, ': '
-        WRITE(10,*) C_balanced(:,:)
-    ENDIF
 #endif
 
     !$OMP PARALLEL DO                                                        &
@@ -1366,11 +1360,6 @@ CONTAINS
 
     ! Reverse the load balancing
 #ifdef MODEL_GCHPCTM
-    ! @Debug: Print out a copy of computed data (C_balanced) with PET number to a file named PET_<PET>.txt
-    IF (this_PET == Input_Opt%numCPUs - 1) THEN
-        WRITE(10,*) 'Computed data on PET ', this_PET, ': '
-        WRITE(10,*) C_balanced(:, :)
-    ENDIF
 
     ! Gather the columns to be swapped to the *_recv arrays
     do I_CELL = 1, State_Grid%NZ
@@ -1381,6 +1370,12 @@ CONTAINS
             RCNTRL_recv(:,(I_CELL-1)*NCELL_moving+i) = RCNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i))
         end do
     end do
+
+    ! @Debug: Print out a copy of reverse send data (C_recv) with PET number to a file named PET_<PET>.txt
+    IF (this_PET == 0) THEN
+        WRITE(10,*) 'Reverse send data on PET ', this_PET, ': '
+        WRITE(10,*) C_recv(:, :)
+    ENDIF
 
     ! Pass the actual data
     Call MPI_Sendrecv(C_recv(1,1), State_Grid%NZ*NCELL_moving*NSPEC, MPI_DOUBLE_PRECISION, next_PET, 4, &
@@ -1395,6 +1390,12 @@ CONTAINS
     Call MPI_Sendrecv(RCNTRL_recv(1,1), State_Grid%NZ*NCELL_moving*20, MPI_DOUBLE_PRECISION, next_PET, 7, &
                   RCNTRL_send(1,1), State_Grid%NZ*NCELL_moving*20, MPI_DOUBLE_PRECISION, prev_PET, 7, &
                   Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
+
+    ! @Debug: Print out a copy of reverse send data (C_send) with PET number to a file named PET_<PET>.txt
+    IF (this_PET == 0) THEN
+        WRITE(10,*) 'Reverse recv data on PET ', this_PET, ': '
+        WRITE(10,*) C_recv(:, :)
+    ENDIF
 
     ! Copy c_balanced to c_1d
     C_1D(:,:) = C_balanced(:,:)
@@ -1411,12 +1412,6 @@ CONTAINS
             RCNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+swap_indices(i)) = RCNTRL_send(:,(I_CELL-1)*NCELL_moving+i)
         end do
     end do
-
-    ! @Debug: Print out a copy of reversed data (C_1D) with PET number to a file named PET_<PET>.txt
-    IF (this_PET == Input_Opt%numCPUs - 1) THEN
-        WRITE(10,*) 'Reversed data on PET ', this_PET, ': '
-        WRITE(10,*) C_1D(:, :)
-    ENDIF
 #endif
     
     DO L = 1, State_Grid%NZ
@@ -3161,8 +3156,8 @@ CONTAINS
     NCELL_moving = NCELL_moving - 1  ! Length of swap_indices
 
     ! Open the PET_0.txt file for writing only if this is PET 0
-    IF (Input_Opt%thisCPU == Input_Opt%numCPUs - 1) THEN
-        OPEN(UNIT=10, FILE='PET_-1.txt', STATUS='REPLACE', ACTION='WRITE')
+    IF (Input_Opt%thisCPU == 0) THEN
+        OPEN(UNIT=10, FILE='PET_0.txt', STATUS='REPLACE', ACTION='WRITE')
     ENDIF
 
   END SUBROUTINE Init_FullChem
