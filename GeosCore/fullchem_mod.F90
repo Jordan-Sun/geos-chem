@@ -1163,7 +1163,7 @@ CONTAINS
     end do
     
     ! @Debug: Print out a copy of load-balanced data (C_balanced) a file named PET_<PET>.txt
-    IF (this_PET == 1) THEN
+    IF (this_PET == Input_Opt%numCPUs - 1) THEN
         WRITE(10,*) 'Load-balanced data on PET ', this_PET, ': '
         WRITE(10,*) C_balanced(:,:)
     ENDIF
@@ -1367,7 +1367,7 @@ CONTAINS
     ! Reverse the load balancing
 #ifdef MODEL_GCHPCTM
     ! @Debug: Print out a copy of computed data (C_balanced) with PET number to a file named PET_<PET>.txt
-    IF (this_PET == 1) THEN
+    IF (this_PET == Input_Opt%numCPUs - 1) THEN
         WRITE(10,*) 'Computed data on PET ', this_PET, ': '
         WRITE(10,*) C_balanced(:, :)
     ENDIF
@@ -1413,7 +1413,7 @@ CONTAINS
     end do
 
     ! @Debug: Print out a copy of reversed data (C_1D) with PET number to a file named PET_<PET>.txt
-    IF (this_PET == 1) THEN
+    IF (this_PET == Input_Opt%numCPUs - 1) THEN
         WRITE(10,*) 'Reversed data on PET ', this_PET, ': '
         WRITE(10,*) C_1D(:, :)
     ENDIF
@@ -3161,8 +3161,8 @@ CONTAINS
     NCELL_moving = NCELL_moving - 1  ! Length of swap_indices
 
     ! Open the PET_0.txt file for writing only if this is PET 0
-    IF (Input_Opt%thisCPU == 1) THEN
-        OPEN(UNIT=10, FILE='PET_1.txt', STATUS='REPLACE', ACTION='WRITE')
+    IF (Input_Opt%thisCPU == Input_Opt%numCPUs - 1) THEN
+        OPEN(UNIT=10, FILE='PET_-1.txt', STATUS='REPLACE', ACTION='WRITE')
     ENDIF
 
   END SUBROUTINE Init_FullChem
