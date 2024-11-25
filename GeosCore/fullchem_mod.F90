@@ -1371,12 +1371,6 @@ CONTAINS
         end do
     end do
 
-    ! @Debug: Print out a copy of reverse send data (C_recv) with PET number to a file named PET_<PET>.txt
-    IF (this_PET == 1) THEN
-        WRITE(10,*) 'Reverse send data on PET ', this_PET, ': '
-        WRITE(10,*) C_recv(:, 1:State_Grid%NZ*NCELL_moving)
-    ENDIF
-
     ! Pass the actual data
     Call MPI_Sendrecv(C_recv(1,1), State_Grid%NZ*NCELL_moving*NSPEC, MPI_DOUBLE_PRECISION, prev_PET, 4, &
                   C_send(1,1), State_Grid%NZ*NCELL_moving*NSPEC, MPI_DOUBLE_PRECISION, next_PET, 4, &
@@ -1390,12 +1384,6 @@ CONTAINS
     Call MPI_Sendrecv(RCNTRL_recv(1,1), State_Grid%NZ*NCELL_moving*20, MPI_DOUBLE_PRECISION, prev_PET, 7, &
                   RCNTRL_send(1,1), State_Grid%NZ*NCELL_moving*20, MPI_DOUBLE_PRECISION, next_PET, 7, &
                   Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
-
-    ! @Debug: Print out a copy of reverse send data (C_send) with PET number to a file named PET_<PET>.txt
-   IF (this_PET == 0) THEN
-      WRITE(10,*) 'Reverse recv data on PET ', this_PET, ': '
-      WRITE(10,*) C_send(:, 1:State_Grid%NZ*NCELL_moving)
-    ENDIF
 
     ! Copy c_balanced to c_1d
     C_1D(:,:) = C_balanced(:,:)
@@ -3155,15 +3143,6 @@ CONTAINS
     end do
     NCELL_moving = NCELL_moving - 1  ! Length of swap_indices
 
-    ! Open the PET_0.txt file for writing only if this is PET 0
-    IF (Input_Opt%thisCPU == 0) THEN
-        OPEN(UNIT=10, FILE='PET_0.txt', STATUS='REPLACE', ACTION='WRITE')
-    ENDIF
-    ! Open the PET_1.txt file for writing only if this is PET 1
-    IF (Input_Opt%thisCPU == 1) THEN
-        OPEN(UNIT=10, FILE='PET_1.txt', STATUS='REPLACE', ACTION='WRITE')
-    ENDIF
-
   END SUBROUTINE Init_FullChem
 !EOC
 !------------------------------------------------------------------------------
@@ -3371,9 +3350,6 @@ CONTAINS
        CALL GC_CheckVar( 'fullchem_mod.F90:swap_indices', 2, RC )
        IF ( RC /= GC_SUCCESS ) RETURN
     ENDIF
-
-    ! Close the PET_0.txt file, it won't have any effect if it is not open
-    CLOSE(UNIT=10)
 
   END SUBROUTINE Cleanup_FullChem
 !EOC
