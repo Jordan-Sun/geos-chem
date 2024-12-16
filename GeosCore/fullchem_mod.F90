@@ -236,7 +236,7 @@ CONTAINS
 
     ! All the KPP inputs remapped to a 1-D array
     INTEGER                :: NCELL, NCELL_local, I_CELL
-    INTEGER                :: this_PET, target_PET, request
+    INTEGER                :: this_PET, next_PET, prev_PET, request
 
     ! For tagged CO saving
     REAL(fp)               :: LCH4, PCO_TOT, PCO_CH4, PCO_NMVOC
@@ -1129,11 +1129,12 @@ CONTAINS
 #endif
 
     ! Load balancing! Determine which cells are we moving and how many
-    target_PET = -1
+    next_PET = -1
+    prev_PET = assignments(1)
     NCELL_moving = 1
-    DO I_CELL = 1, 144
+    DO I_CELL = 2, State_Grid%NX * State_Grid%NY + 1
         IF (assignments(I_CELL)/= -1 .and. assignments(I_CELL) /= this_PET) THEN
-            target_PET = assignments(I_CELL)
+            next_PET = assignments(I_CELL)
             swap_indices(NCELL_moving) = I_CELL
             NCELL_moving = NCELL_moving + 1
         ENDIF
@@ -1146,8 +1147,8 @@ CONTAINS
     ICNTRL_balanced(:, :) = ICNTRL_1D(:, :)
     RCNTRL_balanced(:, :) = RCNTRL_1D(:, :)
 
-    ! Skip load balancing if we are not moving any cells, i.e. target_PET = -1
-    IF (target_PET /= -1) THEN
+    ! Skip load balancing if we are not moving any cells, i.e. next_PET = -1
+    IF (next_PET /= -1) THEN
         ! Copy the columns from the *_1D arrays to the *_send arrays
         DO I_CELL = 1, State_Grid%NZ
             DO i = 1, NCELL_moving
@@ -1159,17 +1160,17 @@ CONTAINS
         END DO
 
         ! Pass the actual data
-        CALL MPI_Sendrecv( C_send(1,1), State_Grid%NZ*NCELL_moving*NSPEC, MPI_DOUBLE_PRECISION, target_PET, 0,       &
-                        C_recv(1,1), State_Grid%NZ*NCELL_moving*NSPEC, MPI_DOUBLE_PRECISION, target_PET, 0,       &
+        CALL MPI_Sendrecv( C_send(1,1), State_Grid%NZ*NCELL_moving*NSPEC, MPI_DOUBLE_PRECISION, next_PET, 0,       &
+                        C_recv(1,1), State_Grid%NZ*NCELL_moving*NSPEC, MPI_DOUBLE_PRECISION, prev_PET, 0,       &
                         Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC                                                 )
-        CALL MPI_Sendrecv( RCONST_send(1,1), State_Grid%NZ*NCELL_moving*NREACT, MPI_DOUBLE_PRECISION, target_PET, 1, &
-                        RCONST_recv(1,1), State_Grid%NZ*NCELL_moving*NREACT, MPI_DOUBLE_PRECISION, target_PET, 1, &
+        CALL MPI_Sendrecv( RCONST_send(1,1), State_Grid%NZ*NCELL_moving*NREACT, MPI_DOUBLE_PRECISION, next_PET, 1, &
+                        RCONST_recv(1,1), State_Grid%NZ*NCELL_moving*NREACT, MPI_DOUBLE_PRECISION, prev_PET, 1, &
                         Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC                                                 )
-        CALL MPI_Sendrecv( I_send(1,1), State_Grid%NZ*NCELL_moving*20, MPI_INTEGER, target_PET, 2,                   &
-                        I_recv(1,1), State_Grid%NZ*NCELL_moving*20, MPI_INTEGER, target_PET, 2,                   &
+        CALL MPI_Sendrecv( I_send(1,1), State_Grid%NZ*NCELL_moving*20, MPI_INTEGER, next_PET, 2,                   &
+                        I_recv(1,1), State_Grid%NZ*NCELL_moving*20, MPI_INTEGER, prev_PET, 2,                   &
                         Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC                                                 )
-        CALL MPI_Sendrecv( R_send(1,1), State_Grid%NZ*NCELL_moving*20, MPI_DOUBLE_PRECISION, target_PET, 3,          &
-                        R_recv(1,1), State_Grid%NZ*NCELL_moving*20, MPI_DOUBLE_PRECISION, target_PET, 3,          &
+        CALL MPI_Sendrecv( R_send(1,1), State_Grid%NZ*NCELL_moving*20, MPI_DOUBLE_PRECISION, next_PET, 3,          &
+                        R_recv(1,1), State_Grid%NZ*NCELL_moving*20, MPI_DOUBLE_PRECISION, prev_PET, 3,          &
                         Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC                                                 )
 
         ! Unpack the columns from the *_recv arrays to the *_balanced arrays
@@ -1392,7 +1393,7 @@ CONTAINS
     RSTATE_1D(:,:) = RSTATE_balanced(:,:)
 
     ! Skip reverse load balancing if we are not moving any cells, i.e. target_PET = -1
-    IF (target_PET /= -1) THEN
+    IF (next_PET /= -1) THEN
         ! Gather the columns to be swapped to the *_recv arrays
         DO I_CELL = 1, State_Grid%NZ
             DO i = 1, NCELL_moving
@@ -1404,17 +1405,17 @@ CONTAINS
         END DO
 
         ! Pass the actual data
-        CALL MPI_Sendrecv( C_recv(1,1), State_Grid%NZ*NCELL_moving*NSPEC, MPI_DOUBLE_PRECISION, target_PET, 4,       &
-                        C_send(1,1), State_Grid%NZ*NCELL_moving*NSPEC, MPI_DOUBLE_PRECISION, target_PET, 4,       &
+        CALL MPI_Sendrecv( C_recv(1,1), State_Grid%NZ*NCELL_moving*NSPEC, MPI_DOUBLE_PRECISION, next_PET, 4,       &
+                        C_send(1,1), State_Grid%NZ*NCELL_moving*NSPEC, MPI_DOUBLE_PRECISION, prev_PET, 4,       &
                         Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC                                                 )             
-        CALL MPI_Sendrecv( RCONST_recv(1,1), State_Grid%NZ*NCELL_moving*NREACT, MPI_DOUBLE_PRECISION, target_PET, 5, &
-                        RCONST_send(1,1), State_Grid%NZ*NCELL_moving*NREACT, MPI_DOUBLE_PRECISION, target_PET, 5, &
+        CALL MPI_Sendrecv( RCONST_recv(1,1), State_Grid%NZ*NCELL_moving*NREACT, MPI_DOUBLE_PRECISION, next_PET, 5, &
+                        RCONST_send(1,1), State_Grid%NZ*NCELL_moving*NREACT, MPI_DOUBLE_PRECISION, prev_PET, 5, &
                         Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC                                                 )
-        CALL MPI_Sendrecv( I_recv(1,1), State_Grid%NZ*NCELL_moving*20, MPI_INTEGER, target_PET, 6,                   &
-                        I_send(1,1), State_Grid%NZ*NCELL_moving*20, MPI_INTEGER, target_PET, 6,                   &
+        CALL MPI_Sendrecv( I_recv(1,1), State_Grid%NZ*NCELL_moving*20, MPI_INTEGER, next_PET, 6,                   &
+                        I_send(1,1), State_Grid%NZ*NCELL_moving*20, MPI_INTEGER, prev_PET, 6,                   &
                         Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC                                                 )
-        CALL MPI_Sendrecv( R_recv(1,1), State_Grid%NZ*NCELL_moving*20, MPI_DOUBLE_PRECISION, target_PET, 7,          &
-                        R_send(1,1), State_Grid%NZ*NCELL_moving*20, MPI_DOUBLE_PRECISION, target_PET, 7,          &
+        CALL MPI_Sendrecv( R_recv(1,1), State_Grid%NZ*NCELL_moving*20, MPI_DOUBLE_PRECISION, next_PET, 7,          &
+                        R_send(1,1), State_Grid%NZ*NCELL_moving*20, MPI_DOUBLE_PRECISION, prev_PET, 7,          &
                         Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC                                                 )
 
         ! Unpack the columns from the *_send arrays
@@ -3156,7 +3157,7 @@ CONTAINS
         CALL GC_Error( 'Failed to allocate RSTATE_balanced', RC, ThisLoc )
         RETURN
     End If
-    Allocate(assignments (144), STAT=RC)
+    Allocate(assignments (State_Grid%NX * State_Grid%NY + 1), STAT=RC)
     Call GC_CheckVar( 'fullchem_mod.F90:assignments', 0, RC )
     IF ( RC /= GC_SUCCESS ) Then
             CALL GC_Error( 'Failed to allocate assignments', RC, ThisLoc )
