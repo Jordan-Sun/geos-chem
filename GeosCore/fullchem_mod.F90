@@ -1160,17 +1160,17 @@ CONTAINS
         END DO
 
         ! Pass the actual data
-        CALL MPI_Sendrecv( C_send(1,1), State_Grid%NZ*NCELL_moving*NSPEC, MPI_DOUBLE_PRECISION, next_PET, 0,       &
-                        C_recv(1,1), State_Grid%NZ*NCELL_moving*NSPEC, MPI_DOUBLE_PRECISION, prev_PET, 0,       &
+        CALL MPI_Sendrecv( C_send(1,1), State_Grid%NZ*NCELL_moving*NSPEC, MPI_DOUBLE_PRECISION, prev_PET, 0,       &
+                        C_recv(1,1), State_Grid%NZ*NCELL_moving*NSPEC, MPI_DOUBLE_PRECISION, next_PET, 0,       &
                         Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC                                                 )
-        CALL MPI_Sendrecv( RCONST_send(1,1), State_Grid%NZ*NCELL_moving*NREACT, MPI_DOUBLE_PRECISION, next_PET, 1, &
-                        RCONST_recv(1,1), State_Grid%NZ*NCELL_moving*NREACT, MPI_DOUBLE_PRECISION, prev_PET, 1, &
+        CALL MPI_Sendrecv( RCONST_send(1,1), State_Grid%NZ*NCELL_moving*NREACT, MPI_DOUBLE_PRECISION, prev_PET, 1, &
+                        RCONST_recv(1,1), State_Grid%NZ*NCELL_moving*NREACT, MPI_DOUBLE_PRECISION, next_PET, 1, &
                         Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC                                                 )
-        CALL MPI_Sendrecv( I_send(1,1), State_Grid%NZ*NCELL_moving*20, MPI_INTEGER, next_PET, 2,                   &
-                        I_recv(1,1), State_Grid%NZ*NCELL_moving*20, MPI_INTEGER, prev_PET, 2,                   &
+        CALL MPI_Sendrecv( I_send(1,1), State_Grid%NZ*NCELL_moving*20, MPI_INTEGER, prev_PET, 2,                   &
+                        I_recv(1,1), State_Grid%NZ*NCELL_moving*20, MPI_INTEGER, next_PET, 2,                   &
                         Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC                                                 )
-        CALL MPI_Sendrecv( R_send(1,1), State_Grid%NZ*NCELL_moving*20, MPI_DOUBLE_PRECISION, next_PET, 3,          &
-                        R_recv(1,1), State_Grid%NZ*NCELL_moving*20, MPI_DOUBLE_PRECISION, prev_PET, 3,          &
+        CALL MPI_Sendrecv( R_send(1,1), State_Grid%NZ*NCELL_moving*20, MPI_DOUBLE_PRECISION, prev_PET, 3,          &
+                        R_recv(1,1), State_Grid%NZ*NCELL_moving*20, MPI_DOUBLE_PRECISION, next_PET, 3,          &
                         Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC                                                 )
 
         ! Unpack the columns from the *_recv arrays to the *_balanced arrays
