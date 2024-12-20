@@ -1135,7 +1135,7 @@ CONTAINS
     IF (reassignment_data(interval)%next_PET /= -1) THEN
         ! Copy the columns from the *_1D arrays to the *_send arrays
         DO I_CELL = 1, State_Grid%NZ
-            DO i = 1, NCELL_moving
+            DO i = 1, reassignment_data(interval)%NCELL_moving
                 C_send(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
                 RCONST_send(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
                 I_send(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = ICNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
@@ -3091,7 +3091,8 @@ CONTAINS
             END IF
         END IF
         ! Parse the line to fill the swap_indices array, advance no because we want to continue reading the same line
-        READ(line, *, ADVANCE='NO', IOSTAT=RC) (reassignment_data(N)%swap_indices(I), I=1, reassignment_data(N)%NCELL_moving)
+        ! Borrow KppID as the index for the swap_indices array
+        READ(line, *, ADVANCE='NO', IOSTAT=RC) (reassignment_data(N)%swap_indices(KppID), KppID=1, reassignment_data(N)%NCELL_moving)
         IF (RC /= 0) THEN
             CALL GC_Error( 'Error reading reassignment file', RC, ThisLoc )
             RETURN
