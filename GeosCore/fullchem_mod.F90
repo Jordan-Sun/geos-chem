@@ -238,7 +238,7 @@ CONTAINS
 
     ! All the KPP inputs remapped to a 1-D array
     INTEGER                :: NCELL, NCELL_local, I_CELL
-    INTEGER                :: this_PET, next_PET, prev_PET, request
+    INTEGER                :: this_PET, request
 
     ! For tagged CO saving
     REAL(fp)               :: LCH4, PCO_TOT, PCO_CH4, PCO_NMVOC
@@ -1125,7 +1125,7 @@ CONTAINS
     RCNTRL_balanced(:, :) = RCNTRL_1D(:, :)
 
     ! Skip load balancing if we are not moving any cells, i.e. next_PET = -1
-    IF (next_PET /= -1) THEN
+    IF (next_PETs(interval) /= -1) THEN
         ! Copy the columns from the *_1D arrays to the *_send arrays
         DO I_CELL = 1, State_Grid%NZ
             DO i = 1, NCELL_moving
@@ -1137,17 +1137,17 @@ CONTAINS
         END DO
 
         ! Pass the actual data
-        CALL MPI_Sendrecv( C_send(1,1), State_Grid%NZ*NCELL_movings(interval)*NSPEC, MPI_DOUBLE_PRECISION, prev_PET, 0,       &
-                        C_recv(1,1), State_Grid%NZ*NCELL_movings(interval)*NSPEC, MPI_DOUBLE_PRECISION, next_PET, 0,       &
+        CALL MPI_Sendrecv( C_send(1,1), State_Grid%NZ*NCELL_movings(interval)*NSPEC, MPI_DOUBLE_PRECISION, prev_PETs(interval), 0,       &
+                        C_recv(1,1), State_Grid%NZ*NCELL_movings(interval)*NSPEC, MPI_DOUBLE_PRECISION, next_PETs(interval), 0,       &
                         Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC                                                 )
-        CALL MPI_Sendrecv( RCONST_send(1,1), State_Grid%NZ*NCELL_movings(interval)*NREACT, MPI_DOUBLE_PRECISION, prev_PET, 1, &
-                        RCONST_recv(1,1), State_Grid%NZ*NCELL_movings(interval)*NREACT, MPI_DOUBLE_PRECISION, next_PET, 1, &
+        CALL MPI_Sendrecv( RCONST_send(1,1), State_Grid%NZ*NCELL_movings(interval)*NREACT, MPI_DOUBLE_PRECISION, prev_PETs(interval), 1, &
+                        RCONST_recv(1,1), State_Grid%NZ*NCELL_movings(interval)*NREACT, MPI_DOUBLE_PRECISION, next_PETs(interval), 1, &
                         Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC                                                 )
-        CALL MPI_Sendrecv( I_send(1,1), State_Grid%NZ*NCELL_movings(interval)*20, MPI_INTEGER, prev_PET, 2,                   &
-                        I_recv(1,1), State_Grid%NZ*NCELL_movings(interval)*20, MPI_INTEGER, next_PET, 2,                   &
+        CALL MPI_Sendrecv( I_send(1,1), State_Grid%NZ*NCELL_movings(interval)*20, MPI_INTEGER, prev_PETs(interval), 2,                   &
+                        I_recv(1,1), State_Grid%NZ*NCELL_movings(interval)*20, MPI_INTEGER, next_PETs(interval), 2,                   &
                         Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC                                                 )
-        CALL MPI_Sendrecv( R_send(1,1), State_Grid%NZ*NCELL_movings(interval)*20, MPI_DOUBLE_PRECISION, prev_PET, 3,          &
-                        R_recv(1,1), State_Grid%NZ*NCELL_movings(interval)*20, MPI_DOUBLE_PRECISION, next_PET, 3,          &
+        CALL MPI_Sendrecv( R_send(1,1), State_Grid%NZ*NCELL_movings(interval)*20, MPI_DOUBLE_PRECISION, prev_PETs(interval), 3,          &
+                        R_recv(1,1), State_Grid%NZ*NCELL_movings(interval)*20, MPI_DOUBLE_PRECISION, next_PETs(interval), 3,          &
                         Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC                                                 )
 
         ! Unpack the columns from the *_recv arrays to the *_balanced arrays
@@ -1370,7 +1370,7 @@ CONTAINS
     RSTATE_1D(:,:) = RSTATE_balanced(:,:)
 
     ! Skip reverse load balancing if we are not moving any cells, i.e. target_PET = -1
-    IF (next_PET /= -1) THEN
+    IF (next_PETs(interval) /= -1) THEN
         ! Gather the columns to be swapped to the *_recv arrays
         DO I_CELL = 1, State_Grid%NZ
             DO i = 1, NCELL_movings(interval)
@@ -1382,17 +1382,17 @@ CONTAINS
         END DO
 
         ! Pass the actual data
-        CALL MPI_Sendrecv( C_recv(1,1), State_Grid%NZ*NCELL_movings(interval)*NSPEC, MPI_DOUBLE_PRECISION, next_PET, 4,       &
-                        C_send(1,1), State_Grid%NZ*NCELL_movings(interval)*NSPEC, MPI_DOUBLE_PRECISION, prev_PET, 4,       &
+        CALL MPI_Sendrecv( C_recv(1,1), State_Grid%NZ*NCELL_movings(interval)*NSPEC, MPI_DOUBLE_PRECISION, next_PETs(interval), 4,       &
+                        C_send(1,1), State_Grid%NZ*NCELL_movings(interval)*NSPEC, MPI_DOUBLE_PRECISION, prev_PETs(interval), 4,       &
                         Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC                                                 )             
-        CALL MPI_Sendrecv( RCONST_recv(1,1), State_Grid%NZ*NCELL_movings(interval)*NREACT, MPI_DOUBLE_PRECISION, next_PET, 5, &
-                        RCONST_send(1,1), State_Grid%NZ*NCELL_movings(interval)*NREACT, MPI_DOUBLE_PRECISION, prev_PET, 5, &
+        CALL MPI_Sendrecv( RCONST_recv(1,1), State_Grid%NZ*NCELL_movings(interval)*NREACT, MPI_DOUBLE_PRECISION, next_PETs(interval), 5, &
+                        RCONST_send(1,1), State_Grid%NZ*NCELL_movings(interval)*NREACT, MPI_DOUBLE_PRECISION, prev_PETs(interval), 5, &
                         Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC                                                 )
-        CALL MPI_Sendrecv( I_recv(1,1), State_Grid%NZ*NCELL_movings(interval)*20, MPI_INTEGER, next_PET, 6,                   &
-                        I_send(1,1), State_Grid%NZ*NCELL_movings(interval)*20, MPI_INTEGER, prev_PET, 6,                   &
+        CALL MPI_Sendrecv( I_recv(1,1), State_Grid%NZ*NCELL_movings(interval)*20, MPI_INTEGER, next_PETs(interval), 6,                   &
+                        I_send(1,1), State_Grid%NZ*NCELL_movings(interval)*20, MPI_INTEGER, prev_PETs(interval), 6,                   &
                         Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC                                                 )
-        CALL MPI_Sendrecv( R_recv(1,1), State_Grid%NZ*NCELL_movings(interval)*20, MPI_DOUBLE_PRECISION, next_PET, 7,          &
-                        R_send(1,1), State_Grid%NZ*NCELL_movings(interval)*20, MPI_DOUBLE_PRECISION, prev_PET, 7,          &
+        CALL MPI_Sendrecv( R_recv(1,1), State_Grid%NZ*NCELL_movings(interval)*20, MPI_DOUBLE_PRECISION, next_PETs(interval), 7,          &
+                        R_send(1,1), State_Grid%NZ*NCELL_movings(interval)*20, MPI_DOUBLE_PRECISION, prev_PETs(interval), 7,          &
                         Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC                                                 )
 
         ! Unpack the columns from the *_send arrays
@@ -3048,18 +3048,25 @@ CONTAINS
             CALL GC_Error( 'Error reading reassignment file', RC, ThisLoc )
             RETURN
         END IF
-        read(line, *) prev_PET(N), next_PET(N), NCELL_movings(N)
-        ! Allocate the array for the interval of size NCELL_movings
-        Allocate(swap_indices(N)(NCELL_movings(N)), STAT=RC)
-        IF ( RC /= GC_SUCCESS ) Then
-            CALL GC_Error( 'Failed to allocate swap_indices', RC, ThisLoc )
+        READ(line, *, iostat=RC) prev_PETs(N), next_PETs(N), NCELL_movings(N)
+        IF (RC /= 0) THEN
+            CALL GC_Error( 'Error reading reassignment file', RC, ThisLoc )
             RETURN
+        END IF
+        ! Skip if next_PET is -1
+        IF (next_PETs(N) /= -1) THEN
+         ! Allocate the array for the interval of size NCELL_movings
+         Allocate(swap_indices(N)(NCELL_movings(N)), STAT=RC)
+         IF ( RC /= GC_SUCCESS ) Then
+               CALL GC_Error( 'Failed to allocate swap_indices', RC, ThisLoc )
+               RETURN
+         END IF
         END IF
         ! Parse the line to fill the swap_indices array, advance no because we want to continue reading the same line
         READ(line, *, ADVANCE='NO') (swap_indices(N)(I), I=1, NCELL_movings(N))
 #ifdef BALANCE_DEBUG
         ! debug print contents of prev_PET, next_PET, and swap_indices
-        PRINT *, "Interval ", N, " prev_PET: ", prev_PET(N), " next_PET: ", next_PET(N), " NCELL_movings: ", NCELL_movings(N)
+        PRINT *, "Interval ", N, " prev_PET: ", prev_PETs(N), " next_PET: ", next_PETs(N), " NCELL_movings: ", NCELL_movings(N)
 #endif
     END DO
 
