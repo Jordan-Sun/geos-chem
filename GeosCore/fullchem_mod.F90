@@ -45,6 +45,7 @@ MODULE FullChem_Mod
 !
 ! !PRIVATE TYPES:
 !
+#define BALANCE_DEBUG
   ! Species ID flags (and logicals to denote if species are present)
   INTEGER               :: id_OH,  id_HO2,  id_O3P,  id_O1D, id_CH4
   INTEGER               :: id_PCO, id_LCH4, id_NH3,  id_SO4
@@ -3063,7 +3064,7 @@ CONTAINS
         RETURN
     END IF
     ! Allocate the line buffer
-    ALLOCATE(CHARACTER(LEN=lineLength) :: line)
+    ALLOCATE(CHARACTER(LEN=lineLength + 1) :: line)
     IF ( RC /= GC_SUCCESS ) Then
         CALL GC_Error( 'Failed to allocate line buffer', RC, ThisLoc )
         RETURN
