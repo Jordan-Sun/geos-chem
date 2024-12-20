@@ -104,7 +104,7 @@ MODULE FullChem_Mod
   INTEGER,  ALLOCATABLE :: prev_PETs(:)
   INTEGER,  ALLOCATABLE :: next_PETs(:)
   INTEGER,  ALLOCATABLE :: NCELL_movings(:)
-  INTEGER,  ALLOCATABLE, DIMENSION(:) :: swap_indices(:)
+  INTEGER,  ALLOCATABLE :: swap_indices(:)[:]
   ! Counter to keep track of the current interval.
   INTEGER :: interval
 
@@ -3030,7 +3030,7 @@ CONTAINS
         CALL GC_Error( 'Failed to allocate next_PETs', RC, ThisLoc )
         RETURN
     END IF
-    Allocate(swap_indices (nIntervals, :), STAT=RC)
+    Allocate(swap_indices (nIntervals), STAT=RC)
     IF ( RC /= GC_SUCCESS ) Then
         CALL GC_Error( 'Failed to allocate swap_indices', RC, ThisLoc )
         RETURN
@@ -3043,27 +3043,31 @@ CONTAINS
     END IF
     ! Read all the reassignment at once in the initialization phase to avoid reading multiple times, which might cause lag.
     DO N = 1, nIntervals
-        READ(unit_number, '(A)', iostat=RC) line
+        READ(unit_number, '(A)', IOSTAT=RC) line
         IF (RC /= 0) THEN
             CALL GC_Error( 'Error reading reassignment file', RC, ThisLoc )
             RETURN
         END IF
-        READ(line, *, iostat=RC) prev_PETs(N), next_PETs(N), NCELL_movings(N)
+        READ(line, *, IOSTAT=RC) prev_PETs(N), next_PETs(N), NCELL_movings(N)
         IF (RC /= 0) THEN
             CALL GC_Error( 'Error reading reassignment file', RC, ThisLoc )
             RETURN
         END IF
         ! Skip if next_PET is -1
         IF (next_PETs(N) /= -1) THEN
-         ! Allocate the array for the interval of size NCELL_movings
-         Allocate(swap_indices(N)(NCELL_movings(N)), STAT=RC)
-         IF ( RC /= GC_SUCCESS ) Then
-               CALL GC_Error( 'Failed to allocate swap_indices', RC, ThisLoc )
-               RETURN
-         END IF
+            ! Allocate the array for the interval of size NCELL_movings
+            Allocate(swap_indices(N)(NCELL_movings(N)), STAT=RC)
+            IF ( RC /= GC_SUCCESS ) Then
+                CALL GC_Error( 'Failed to allocate swap_indices', RC, ThisLoc )
+                RETURN
+            END IF
         END IF
         ! Parse the line to fill the swap_indices array, advance no because we want to continue reading the same line
-        READ(line, *, ADVANCE='NO') (swap_indices(N)(I), I=1, NCELL_movings(N))
+        READ(line, *, ADVANCE='NO', IOSTAT=RC) (swap_indices(N)(I), I=1, NCELL_movings(N))
+        IF (RC /= 0) THEN
+            CALL GC_Error( 'Error reading reassignment file', RC, ThisLoc )
+            RETURN
+        END IF
 #ifdef BALANCE_DEBUG
         ! debug print contents of prev_PET, next_PET, and swap_indices
         PRINT *, "Interval ", N, " prev_PET: ", prev_PETs(N), " next_PET: ", next_PETs(N), " NCELL_movings: ", NCELL_movings(N)
