@@ -3040,7 +3040,6 @@ CONTAINS
     CALL get_environment_variable("HOME", HomeDir)
     ! Use write to concatenate strings for the reassignment file path
     WRITE(AssignmentPath, '(A, A, I0, A)') TRIM(HomeDir), '/reassignment/restricted/rank_', Input_Opt%thisCPU, '.csv'
-    assignments = -1
     ! Open the reassignment file
     OPEN(unit=unit_number, file=AssignmentPath, status='old', action='read', iostat=RC)
     IF (RC /= 0) THEN
@@ -3090,13 +3089,15 @@ CONTAINS
                 RETURN
             END IF
         END IF
-        ! Parse the line to fill the swap_indices array, advance no because we want to continue reading the same line
         ! Borrow KppID as the index for the swap_indices array
-        READ(line, *, ADVANCE='NO', IOSTAT=RC) (reassignment_data(N)%swap_indices(KppID), KppID=1, reassignment_data(N)%NCELL_moving)
-        IF (RC /= 0) THEN
-            CALL GC_Error( 'Error reading reassignment file', RC, ThisLoc )
-            RETURN
-        END IF
+        ! Read the swap_indices array in a loop
+        DO KppID = 1, reassignment_data(N)%NCELL_moving
+            READ(line, *, IOSTAT=RC) reassignment_data(N)%swap_indices(KppID)
+            IF (RC /= 0) THEN
+                CALL GC_Error('Error reading swap_indices from reassignment file', RC, ThisLoc)
+                RETURN
+            END IF
+        END DO
 #ifdef BALANCE_DEBUG
         ! debug print contents of prev_PET, next_PET, and swap_indices
         PRINT *, "Interval ", N, " prev_PET: ", reassignment_data(N)%prev_PET, " next_PET: ", reassignment_data(N)%next_PET, " NCELL_moving: ", reassignment_data(N)%NCELL_moving, " swap_indices: ", reassignment_data(N)%swap_indices
@@ -3241,18 +3242,6 @@ CONTAINS
     CALL GC_CheckVar( 'fullchem_mod.F90:RSTATE_balanced', 0, RC )
     IF ( RC /= GC_SUCCESS ) Then
         CALL GC_Error( 'Failed to allocate RSTATE_balanced', RC, ThisLoc )
-        RETURN
-    END IF
-    Allocate(assignments (State_Grid%NX * State_Grid%NY + 1), STAT=RC)
-    Call GC_CheckVar( 'fullchem_mod.F90:assignments', 0, RC )
-    IF ( RC /= GC_SUCCESS ) Then
-            CALL GC_Error( 'Failed to allocate assignments', RC, ThisLoc )
-            RETURN
-    END IF
-    Allocate(swap_indices (State_Grid%NX * State_Grid%NY) , STAT=RC)
-    CALL GC_CheckVar( 'fullchem_mod.F90:swap_indices', 0, RC )
-    IF ( RC /= GC_SUCCESS ) Then
-        CALL GC_Error( 'Failed to allocate swap_indices', RC, ThisLoc )
         RETURN
     END IF
   END SUBROUTINE Init_FullChem
@@ -3456,9 +3445,9 @@ CONTAINS
        IF ( RC /= GC_SUCCESS ) RETURN
     ENDIF
 
-    If ( ALLOCATED( swap_indices ) ) Then
-       Deallocate(swap_indices, STAT=RC)
-       CALL GC_CheckVar( 'fullchem_mod.F90:swap_indices', 2, RC )
+    IF ( ALLOCATED( reassignment_data ) ) THEN
+       DEALLOCATE( reassignment_data, STAT=RC  )
+       CALL GC_CheckVar( 'fullchem_mod.F90:reassignment_data', 2, RC )
        IF ( RC /= GC_SUCCESS ) RETURN
     ENDIF
   END SUBROUTINE Cleanup_FullChem
