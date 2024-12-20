@@ -111,7 +111,7 @@ MODULE FullChem_Mod
   REAL(fP), ALLOCATABLE  :: RSTATE_balanced(:,:)
   ! Stores the previous and next PETs for each interval, as well as the indices of the columns to swap.
   INTEGER,  PARAMETER :: unit_number = 10
-  INTEGER,  ALLOCATABLE :: reassignment_data(:)
+  TYPE(ReassignmentData), ALLOCATABLE :: reassignment_data(:)
   ! Counter to keep track of the current interval.
   INTEGER :: interval
 
