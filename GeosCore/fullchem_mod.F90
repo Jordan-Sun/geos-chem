@@ -45,7 +45,7 @@ MODULE FullChem_Mod
 !
 ! !PRIVATE TYPES:
 !
-#define BALANCE_DEBUG
+! #define BALANCE_DEBUG
   ! Species ID flags (and logicals to denote if species are present)
   INTEGER               :: id_OH,  id_HO2,  id_O3P,  id_O1D, id_CH4
   INTEGER               :: id_PCO, id_LCH4, id_NH3,  id_SO4
