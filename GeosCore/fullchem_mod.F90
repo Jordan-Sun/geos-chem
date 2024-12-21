@@ -3063,7 +3063,7 @@ CONTAINS
         CALL GC_Error( 'Failed to allocate reassignment_data', RC, ThisLoc )
         RETURN
     END IF
-    ! Allocate the line buffer
+    ! Allocate the line buffer, plus 1 for the null terminator.
     ALLOCATE(CHARACTER(LEN=lineLength + 1) :: line)
     IF ( RC /= GC_SUCCESS ) Then
         CALL GC_Error( 'Failed to allocate line buffer', RC, ThisLoc )
@@ -3081,28 +3081,36 @@ CONTAINS
             CALL GC_Error( 'Error reading reassignment file', RC, ThisLoc )
             RETURN
         END IF
+#ifdef BALANCE_DEBUG
+        ! debug print contents of prev_PET, next_PET, and NCELL_moving of PET 0
+        IF (Input_Opt%thisCPU == 0) THEN
+            PRINT *, "Interval ", N, " prev_PET: ", reassignment_data(N)%prev_PET, " next_PET: ", reassignment_data(N)%next_PET, " NCELL_moving: ", reassignment_data(N)%NCELL_moving
+        END IF
+#endif
         ! Skip if next_PET is -1
-        IF (reassignment_data(N)%next_PET == -1) THEN
+        IF (reassignment_data(N)%next_PET /= -1) THEN
             ! Allocate the swap indices array to be the same length as NCELL_moving
             Allocate(reassignment_data(N)%swap_indices(reassignment_data(N)%NCELL_moving), STAT=RC)
             IF ( RC /= GC_SUCCESS ) Then
                 CALL GC_Error( 'Failed to allocate swap_indices', RC, ThisLoc )
                 RETURN
             END IF
-        END IF
-        ! Borrow KppID as the index for the swap_indices array
-        ! Read the swap_indices array in a loop
-        DO KppID = 1, reassignment_data(N)%NCELL_moving
-            READ(line, *, IOSTAT=RC) reassignment_data(N)%swap_indices(KppID)
-            IF (RC /= 0) THEN
-                CALL GC_Error('Error reading swap_indices from reassignment file', RC, ThisLoc)
-                RETURN
-            END IF
-        END DO
+            ! Borrow KppID as the index for the swap_indices array
+            ! Read the swap_indices array in a loop
+            DO KppID = 1, reassignment_data(N)%NCELL_moving
+                READ(line, *, IOSTAT=RC) reassignment_data(N)%swap_indices(KppID)
+                IF (RC /= 0) THEN
+                    CALL GC_Error('Error reading swap_indices from reassignment file', RC, ThisLoc)
+                    RETURN
+                END IF
+            END DO
 #ifdef BALANCE_DEBUG
-        ! debug print contents of prev_PET, next_PET, and swap_indices
-        PRINT *, "Interval ", N, " prev_PET: ", reassignment_data(N)%prev_PET, " next_PET: ", reassignment_data(N)%next_PET, " NCELL_moving: ", reassignment_data(N)%NCELL_moving, " swap_indices: ", reassignment_data(N)%swap_indices
+            ! debug print contents of swap indices of PET 0
+            IF (Input_Opt%thisCPU == 0) THEN
+                PRINT *, "Interval ", N, " swap_indices: ", reassignment_data(N)%swap_indices
+            END IF
 #endif
+        END IF
     END DO
 
     CLOSE(unit_number)
