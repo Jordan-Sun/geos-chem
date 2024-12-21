@@ -3048,7 +3048,7 @@ CONTAINS
         RETURN
     END IF
     ! Read the first line which should be the number of intervals
-    READ(unit_number, '(A)', iostat=RC) nIntervals, lineLength
+    READ(unit_number, *, IOSTAT=RC) nIntervals, lineLength
     IF (RC /= 0) THEN
         CALL GC_Error( 'Error reading reassignment file', RC, ThisLoc )
         RETURN
