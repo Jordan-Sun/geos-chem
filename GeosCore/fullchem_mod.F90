@@ -3071,14 +3071,9 @@ CONTAINS
     END IF
     ! Read all the reassignment at once in the initialization phase to avoid reading multiple times, which might cause lag.
     DO N = 1, nIntervals
-        READ(unit_number, '(A)', IOSTAT=RC) line
+        READ(unit_number, *, IOSTAT=RC) reassignment_data(N)%prev_PET, reassignment_data(N)%next_PET, reassignment_data(N)%NCELL_moving
         IF (RC /= 0) THEN
-            CALL GC_Error( 'Error reading reassignment file', RC, ThisLoc )
-            RETURN
-        END IF
-        READ(line, *, IOSTAT=RC) reassignment_data(N)%prev_PET, reassignment_data(N)%next_PET, reassignment_data(N)%NCELL_moving
-        IF (RC /= 0) THEN
-            CALL GC_Error( 'Error reading reassignment file', RC, ThisLoc )
+            CALL GC_Error('Error reading reassignment file', RC, ThisLoc)
             RETURN
         END IF
 #ifdef BALANCE_DEBUG
@@ -3092,18 +3087,15 @@ CONTAINS
             ! Allocate the swap indices array to be the same length as NCELL_moving
             Allocate(reassignment_data(N)%swap_indices(reassignment_data(N)%NCELL_moving), STAT=RC)
             IF ( RC /= GC_SUCCESS ) Then
-                CALL GC_Error( 'Failed to allocate swap_indices', RC, ThisLoc )
+                CALL GC_Error( 'Failed to allocate swap_indices', RC, ThisLoc)
                 RETURN
             END IF
-            ! Borrow KppID as the index for the swap_indices array
-            ! Read the swap_indices array in a loop
-            DO KppID = 1, reassignment_data(N)%NCELL_moving
-                READ(line, *, IOSTAT=RC) reassignment_data(N)%swap_indices(KppID)
-                IF (RC /= 0) THEN
-                    CALL GC_Error('Error reading swap_indices from reassignment file', RC, ThisLoc)
-                    RETURN
-                END IF
-            END DO
+            ! Read the swap indices from the next line
+            READ(unit_number, *, IOSTAT=RC) reassignment_data(N)%swap_indices
+            IF (RC /= 0) THEN
+                CALL GC_Error('Error reading reassignment file', RC, ThisLoc)
+                RETURN
+            END IF
 #ifdef BALANCE_DEBUG
             ! debug print contents of swap indices of PET 0
             IF (Input_Opt%thisCPU == 0) THEN
