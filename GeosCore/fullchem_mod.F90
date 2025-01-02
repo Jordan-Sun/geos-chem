@@ -103,13 +103,6 @@ MODULE FullChem_Mod
   REAL(fP), ALLOCATABLE  :: RCONST_recv(:,:)
   INTEGER,  ALLOCATABLE  :: I_recv(:,:)
   REAL(fP), ALLOCATABLE  :: R_recv(:,:)
-  ! Buffers for rearranged cells after load balancing. (todo: do this in place using the _1d arrays)
-  REAL(fP), ALLOCATABLE  :: C_balanced(:,:)
-  REAL(fP), ALLOCATABLE  :: RCONST_balanced(:,:)
-  INTEGER,  ALLOCATABLE  :: ICNTRL_balanced(:,:)
-  REAL(fP), ALLOCATABLE  :: RCNTRL_balanced(:,:)
-  INTEGER,  ALLOCATABLE  :: ISTATUS_balanced(:,:)
-  REAL(fP), ALLOCATABLE  :: RSTATE_balanced(:,:)
   ! Stores the previous and next PETs for each interval, as well as the indices of the columns to swap.
   INTEGER,  PARAMETER :: unit_number = 10
   TYPE(ReassignmentData), ALLOCATABLE :: reassignment_data(:)
@@ -1117,20 +1110,12 @@ CONTAINS
     ! Output
     ISTATUS_1D       = 0.0e+0_fp
     RSTATE_1D        = 0.0e+0_fp
-    ISTATUS_balanced = 0.0e+0_fp
-    RSTATE_balanced  = 0.0e+0_fp
 
 #ifdef MODEL_GCHPCTM 
     ! Increment the interval counter
     interval = interval + 1
     ! Since we are only swapping columns, the number of cells in the balanced domain is the same as the local domain
     this_PET = Input_Opt%thisCPU
-
-    ! Copy *_1d to *_balanced regardless of whether we are moving cells or not
-    C_balanced(:, :) = C_1D(:, :)
-    RCONST_balanced(:, :) = RCONST_1D(:, :)
-    ICNTRL_balanced(:, :) = ICNTRL_1D(:, :)
-    RCNTRL_balanced(:, :) = RCNTRL_1D(:, :)
 
     ! Skip load balancing if we are not moving any cells, i.e. next_PET = -1
     IF (reassignment_data(interval)%next_PET /= -1) THEN
@@ -1173,13 +1158,13 @@ CONTAINS
             reassignment_data(interval)%next_PET, 3, &
             Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
 
-        ! Unpack the columns from the *_recv arrays to the *_balanced arrays
+        ! Unpack the columns from the *_recv arrays to the *_1D arrays
         DO I_CELL = 1, State_Grid%NZ
             DO i = 1, reassignment_data(interval)%NCELL_moving
-                C_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = C_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i)
-                RCONST_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = RCONST_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i)
-                ICNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = I_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i)
-                RCNTRL_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = R_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i)
+                C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = C_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i)
+                RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = RCONST_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i)
+                ICNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = I_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i)
+                RCNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = R_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i)
             END DO
         END DO
     ENDIF
@@ -1209,10 +1194,10 @@ CONTAINS
        IERR = 0
 
        ! Load in data from saved arrays
-       RCONST(:)   = RCONST_balanced(:,I_CELL)
-       C(:)        = C_balanced(:,I_CELL)
-       ICNTRL(:)   = ICNTRL_balanced(:,I_CELL)
-       RCNTRL(:)   = RCNTRL_balanced(:,I_CELL)
+       RCONST(:)   = RCONST_1D(:,I_CELL)
+       C(:)        = C_1D(:,I_CELL)
+       ICNTRL(:)   = ICNTRL_1D(:,I_CELL)
+       RCNTRL(:)   = RCNTRL_1D(:,I_CELL)
 
        ! In case we need to reset
        C_before_integrate(:) = C(:)
@@ -1245,8 +1230,8 @@ CONTAINS
        ThreadNum = Thread,                                &
        RC        = RC                                    )
        ! Add to diagnostic arrays
-       RSTATE_balanced(:,I_CELL)  = RSTATE(:)
-       ISTATUS_balanced(:,I_CELL) = ISTATUS(:)
+       RSTATE_1D(:,I_CELL)  = RSTATE(:)
+       ISTATUS_1D(:,I_CELL) = ISTATUS(:)
 
        ! Print grid box indices to screen if integrate failed
        IF ( IERR < 0 ) THEN
@@ -1286,7 +1271,7 @@ CONTAINS
           ! Update rates again
           ! NOT POSSIBLE - relevant arrays no longer exist
           !CALL Update_RCONST( )
-          RCONST(:) = RCONST_balanced(:,I_CELL)
+          RCONST(:) = RCONST_1D(:,I_CELL)
 
           ! Start timer
           IF ( Input_Opt%useTimers ) THEN
@@ -1310,8 +1295,8 @@ CONTAINS
 
           ! Again, store ISTATUS and RSTATE
           ! ISTATUS is all counts
-          ISTATUS_balanced(:,I_CELL) = ISTATUS_balanced(:,I_CELL) + ISTATUS(:)
-          RSTATE_balanced(:,I_CELL) = RSTATE(:)
+          ISTATUS_1D(:,I_CELL) = ISTATUS_1D(:,I_CELL) + ISTATUS(:)
+          RSTATE_1D(:,I_CELL) = RSTATE(:)
 
           !==================================================================
           ! Exit upon the second failure
@@ -1381,26 +1366,20 @@ CONTAINS
        ENDIF
 
        ! Copy C back into C_1D
-       C_balanced(:,I_CELL) = C(:)
-       RCONST_balanced(:,I_CELL) = RCONST(:)
+       C_1D(:,I_CELL) = C(:)
+       RCONST_1D(:,I_CELL) = RCONST(:)
     ENDDO
 
 #ifdef MODEL_GCHPCTM
-    ! Copy c_balanced to c_1d regardless of whether we are moving cells or not
-    C_1D(:,:) = C_balanced(:,:)
-    RCONST_1D(:,:) = RCONST_balanced(:,:)
-    ISTATUS_1D(:,:) = ISTATUS_balanced(:,:)
-    RSTATE_1D(:,:) = RSTATE_balanced(:,:)
-
     ! Skip reverse load balancing if we are not moving any cells, i.e. target_PET = -1
     IF (reassignment_data(interval)%next_PET /= -1) THEN
         ! Gather the columns to be swapped to the *_recv arrays
         DO I_CELL = 1, State_Grid%NZ
             DO i = 1, reassignment_data(interval)%NCELL_moving
-                C_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = C_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
-                RCONST_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = RCONST_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
-                I_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = ISTATUS_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
-                R_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = RSTATE_balanced(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
+                C_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
+                RCONST_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
+                I_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = ISTATUS_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
+                R_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = RSTATE_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
             END DO
         END DO
 
@@ -3209,42 +3188,6 @@ CONTAINS
         CALL GC_Error( 'Failed to allocate R_recv', RC, ThisLoc )
         RETURN
     END IF
-    Allocate(C_balanced      (NSPEC,NCELL_max) , STAT=RC)
-    CALL GC_CheckVar( 'fullchem_mod.F90:C_balanced', 0, RC )
-    IF ( RC /= GC_SUCCESS ) Then
-        CALL GC_Error( 'Failed to allocate C_balanced', RC, ThisLoc )
-        RETURN
-    END IF
-    Allocate(RCONST_balanced (NREACT,NCELL_max), STAT=RC)
-    CALL GC_CheckVar( 'fullchem_mod.F90:RCONST_balanced', 0, RC )
-    IF ( RC /= GC_SUCCESS ) Then
-        CALL GC_Error( 'Failed to allocate RCONST_balanced', RC, ThisLoc )
-        RETURN
-    END IF
-    Allocate(ICNTRL_balanced (20,NCELL_max)    , STAT=RC)
-    CALL GC_CheckVar( 'fullchem_mod.F90:ICNTRL_balanced', 0, RC )
-    IF ( RC /= GC_SUCCESS ) Then
-        CALL GC_Error( 'Failed to allocate ICNTRL_balanced', RC, ThisLoc )
-        RETURN
-    END IF
-    Allocate(RCNTRL_balanced (20,NCELL_max)    , STAT=RC)
-    CALL GC_CheckVar( 'fullchem_mod.F90:RCNTRL_balanced', 0, RC )
-    IF ( RC /= GC_SUCCESS ) Then
-        CALL GC_Error( 'Failed to allocate RCNTRL_balanced', RC, ThisLoc )
-        RETURN
-    END IF
-    Allocate(ISTATUS_balanced(20,NCELL_max)    , STAT=RC) 
-    CALL GC_CheckVar( 'fullchem_mod.F90:ISTATUS_balanced', 0, RC )
-    IF ( RC /= GC_SUCCESS ) Then
-        CALL GC_Error( 'Failed to allocate ISTATUS_balanced', RC, ThisLoc )
-        RETURN
-    END IF
-    Allocate(RSTATE_balanced (20,NCELL_max)    , STAT=RC)
-    CALL GC_CheckVar( 'fullchem_mod.F90:RSTATE_balanced', 0, RC )
-    IF ( RC /= GC_SUCCESS ) Then
-        CALL GC_Error( 'Failed to allocate RSTATE_balanced', RC, ThisLoc )
-        RETURN
-    END IF
   END SUBROUTINE Init_FullChem
 !EOC
 !------------------------------------------------------------------------------
@@ -3407,42 +3350,6 @@ CONTAINS
     If ( ALLOCATED( R_recv ) ) Then
        Deallocate(R_recv, STAT=RC)
        CALL GC_CheckVar( 'fullchem_mod.F90:R_recv', 2, RC )
-       IF ( RC /= GC_SUCCESS ) RETURN
-    ENDIF
-
-    If ( ALLOCATED( C_balanced ) ) Then
-       Deallocate(C_balanced, STAT=RC)
-       CALL GC_CheckVar( 'fullchem_mod.F90:C_balanced', 2, RC )
-       IF ( RC /= GC_SUCCESS ) RETURN
-    ENDIF
-
-    If ( ALLOCATED( RCONST_balanced ) ) Then
-       Deallocate(RCONST_balanced, STAT=RC)
-       CALL GC_CheckVar( 'fullchem_mod.F90:RCONST_balanced', 2, RC )
-       IF ( RC /= GC_SUCCESS ) RETURN
-    ENDIF
-
-    If ( ALLOCATED( ICNTRL_balanced ) ) Then
-       Deallocate(ICNTRL_balanced, STAT=RC)
-       CALL GC_CheckVar( 'fullchem_mod.F90:ICNTRL_balanced', 2, RC )
-       IF ( RC /= GC_SUCCESS ) RETURN
-    ENDIF
-
-    If ( ALLOCATED( RCNTRL_balanced ) ) Then
-       Deallocate(RCNTRL_balanced, STAT=RC)
-       CALL GC_CheckVar( 'fullchem_mod.F90:RCNTRL_balanced', 2, RC )
-       IF ( RC /= GC_SUCCESS ) RETURN
-    ENDIF
-
-    If ( ALLOCATED( ISTATUS_balanced ) ) Then
-       Deallocate(ISTATUS_balanced, STAT=RC) 
-       CALL GC_CheckVar( 'fullchem_mod.F90:ISTATUS_balanced', 2, RC )
-       IF ( RC /= GC_SUCCESS ) RETURN
-    ENDIF
-
-    If ( ALLOCATED( RSTATE_balanced ) ) Then
-       Deallocate(RSTATE_balanced, STAT=RC)
-       CALL GC_CheckVar( 'fullchem_mod.F90:RSTATE_balanced', 2, RC )
        IF ( RC /= GC_SUCCESS ) RETURN
     ENDIF
 
