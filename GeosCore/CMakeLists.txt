@@ -34,9 +34,16 @@ if(${USE_REAL8})
 endif()
 
 #-----------------------------------------------------------------------------
+# Define libRDTSC.a
+#-----------------------------------------------------------------------------
+add_library(RDTSC STATIC EXCLUDE_FROM_ALL rdtsc.c)
+# Avoid passing Fortran-specific flags to the RDTSC library
+set_target_properties(RDTSC PROPERTIES COMPILE_FLAGS "")
+
+
+#-----------------------------------------------------------------------------
 # Define libGeosCore.a
 #-----------------------------------------------------------------------------
-set(RDTSC TRUE)
 add_library(GeosCore
   STATIC EXCLUDE_FROM_ALL
   aero_drydep.F90
@@ -107,7 +114,6 @@ add_library(GeosCore
   $<$<BOOL:${RRTMG}>:rrtmg_rad_transfer_mod.F90>
   $<$<BOOL:${TOMAS}>:tomas_mod.F90>
   $<$<BOOL:${APM}>:apm_driv_mod.F90>
-  $<$<BOOL:${RDTSC}>:rdtsc.c>
   # exchange_mod : TODO
 )
 
@@ -126,9 +132,9 @@ target_link_libraries(GeosCore PUBLIC
   History 
   Isorropia 
   KPP
+  RDTSC
   $<LINK_ONLY:HCOI_Shared>    # link only to avoid gathering the rest of the TURs
   $<$<BOOL:${APM}>:APM>       # depends on APM iff APM is true
   $<$<BOOL:${RRTMG}>:GeosRad> # depends on GeosRad iff RRTMG is true
   $<$<BOOL:${GTMM}>:Hg>       # depends on Hg iff GTMM is true
-
 )
