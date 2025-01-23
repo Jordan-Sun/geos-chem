@@ -269,7 +269,7 @@ CONTAINS
     REAL(f4)               :: TROPv_NOx_mass(State_Grid%NX,State_Grid%NY)
 #endif
 #ifdef HIRES_TIMER
-    INTEGER(8)             :: TimeStart, TimeEnd
+    INTEGER(8)             :: TimerStart, TimerEnd
 #endif
 
     ! Grid box integration time diagnostic
@@ -1135,7 +1135,7 @@ CONTAINS
     ! Skip load balancing if we are not moving any cells, i.e. next_PET = -1
     IF (reassignment_data(interval)%next_PET /= -1) THEN
 #ifdef HIRES_TIMER
-        TimeStart = rdtsc()
+        TimerStart = rdtsc()
 #endif
         ! Copy the columns from the *_1D arrays to the *_send arrays
         DO I_CELL = 1, State_Grid%NZ
@@ -1147,11 +1147,11 @@ CONTAINS
             END DO
         END DO
 #ifdef HIRES_TIMER
-        TimeEnd = rdtsc()
+        TimerEnd = rdtsc()
         ! Write both times to timer log file
-        WRITE(unit_number, *) Interval, 'Forward pack', TimeStart, TimeEnd
+        WRITE(unit_number, *) Interval, 'Forward pack', TimerStart, TimerEnd
         
-        TimeStart = rdtsc()
+        TimerStart = rdtsc()
 #endif
         ! Pass the actual data
         CALL MPI_Sendrecv( &
@@ -1182,11 +1182,11 @@ CONTAINS
             reassignment_data(interval)%next_PET, 3, &
             Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
 #ifdef HIRES_TIMER
-        TimeEnd = rdtsc()
+        TimerEnd = rdtsc()
         ! Write both times to timer log file
-        WRITE(unit_number, *) Interval, 'Forward MPI Sendrecv', TimeStart, TimeEnd
+        WRITE(unit_number, *) Interval, 'Forward MPI Sendrecv', TimerStart, TimerEnd
         
-        TimeStart = rdtsc()
+        TimerStart = rdtsc()
 #endif
 
         ! Unpack the columns from the *_recv arrays to the *_1D arrays
@@ -1199,11 +1199,11 @@ CONTAINS
             END DO
         END DO
 #ifdef HIRES_TIMER
-        TimeEnd = rdtsc()
+        TimerEnd = rdtsc()
         ! Write both times to timer log file
-        WRITE(unit_number, *) Interval, 'Forward unpack', TimeStart, TimeEnd
+        WRITE(unit_number, *) Interval, 'Forward unpack', TimerStart, TimerEnd
         
-        TimeStart = rdtsc()
+        TimerStart = rdtsc()
 #endif
     ENDIF
 #endif
@@ -1412,11 +1412,11 @@ CONTAINS
     ! Skip reverse load balancing if we are not moving any cells, i.e. target_PET = -1
     IF (reassignment_data(interval)%next_PET /= -1) THEN
 #ifdef HIRES_TIMER
-        TimeEnd = rdtsc()
+        TimerEnd = rdtsc()
         ! Write both times to timer log file
-        WRITE(unit_number, *) Interval, 'Inbetween', TimeStart, TimeEnd
+        WRITE(unit_number, *) Interval, 'Inbetween', TimerStart, TimerEnd
        
-        TimeStart = rdtsc()
+        TimerStart = rdtsc()
 #endif
         ! Gather the columns to be swapped to the *_recv arrays
         DO I_CELL = 1, State_Grid%NZ
@@ -1428,11 +1428,11 @@ CONTAINS
             END DO
         END DO
 #ifdef HIRES_TIMER
-        TimeEnd = rdtsc()
+        TimerEnd = rdtsc()
         ! Write both times to timer log file
-        WRITE(unit_number, *) Interval, 'Reverse pack', TimeStart, TimeEnd
+        WRITE(unit_number, *) Interval, 'Reverse pack', TimerStart, TimerEnd
 
-        TimeStart = rdtsc()
+        TimerStart = rdtsc()
 #endif
         ! Pass the actual data
         CALL MPI_Sendrecv( &
@@ -1463,11 +1463,11 @@ CONTAINS
             reassignment_data(interval)%prev_PET, 7, &
             Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
 #ifdef HIRES_TIMER
-        TimeEnd = rdtsc()
+        TimerEnd = rdtsc()
         ! Write both times to timer log file
-        WRITE(unit_number, *) Interval, 'Reverse MPI Sendrecv', TimeStart, TimeEnd
+        WRITE(unit_number, *) Interval, 'Reverse MPI Sendrecv', TimerStart, TimerEnd
         
-        TimeStart = rdtsc()
+        TimerStart = rdtsc()
 #endif
         ! Unpack the columns from the *_send arrays
         DO I_CELL = 1, State_Grid%NZ
@@ -1479,9 +1479,9 @@ CONTAINS
             END DO
         END DO
 #ifdef HIRES_TIMER
-        TimeEnd = rdtsc()
+        TimerEnd = rdtsc()
         ! Write both times to timer log file
-        WRITE(unit_number, *) Interval, 'Reverse Unpack', TimeStart, TimeEnd
+        WRITE(unit_number, *) Interval, 'Reverse Unpack', TimerStart, TimerEnd
 #endif
     ENDIF
 #endif
