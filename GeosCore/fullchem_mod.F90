@@ -17,9 +17,20 @@ MODULE FullChem_Mod
 ! !USES:
 !
   USE Precision_Mod
+#ifdef HIRES_TIMER
+  USE iso_c_binding
+#endif
 
   IMPLICIT NONE
 
+#ifdef HIRES_TIMER
+  INTERFACE
+    FUNCTION rdtsc() bind(C, name="rdtsc")
+      USE iso_c_binding
+      INTEGER(c_int64_t) :: rdtsc
+    END FUNCTION rdtsc
+  END INTERFACE
+#endif
 
   ! Define the derived type
   TYPE :: ReassignmentData
@@ -259,7 +270,6 @@ CONTAINS
 #endif
 #ifdef HIRES_TIMER
     INTEGER(8)             :: TimeStart, TimeEnd
-    INTEGER(4)             :: Hi, Lo    ! Placeholder for assembly read
 #endif
 
     ! Grid box integration time diagnostic
@@ -1125,11 +1135,7 @@ CONTAINS
     ! Skip load balancing if we are not moving any cells, i.e. next_PET = -1
     IF (reassignment_data(interval)%next_PET /= -1) THEN
 #ifdef HIRES_TIMER
-        !DIR$ ASM
-        asm("rdtsc" : "=a"(Lo), "=d"(Hi));
-        !DIR$ END ASM
-        ! Bit shift to get the full 64 bit value
-        TimeStart = shiftl(int(Hi, 8), 32) + Lo
+        TimeStart = rdtsc()
 #endif
         ! Copy the columns from the *_1D arrays to the *_send arrays
         DO I_CELL = 1, State_Grid%NZ
@@ -1141,19 +1147,11 @@ CONTAINS
             END DO
         END DO
 #ifdef HIRES_TIMER
-        !DIR$ ASM
-        asm("rdtsc" : "=a"(Lo), "=d"(Hi));
-        !DIR$ END ASM
-        ! Bit shift to get the full 64 bit value
-        TimeEnd = shiftl(int(Hi, 8), 32) + Lo
+        TimeEnd = rdtsc()
         ! Write both times to timer log file
         WRITE(unit_number, *) Interval, 'Forward pack', TimeStart, TimeEnd
         
-        !DIR$ ASM
-        asm("rdtsc" : "=a"(Lo), "=d"(Hi));
-        !DIR$ END ASM
-        ! Bit shift to get the full 64 bit value
-        TimeStart = shiftl(int(Hi, 8), 32) + Lo
+        TimeStart = rdtsc()
 #endif
         ! Pass the actual data
         CALL MPI_Sendrecv( &
@@ -1184,19 +1182,11 @@ CONTAINS
             reassignment_data(interval)%next_PET, 3, &
             Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
 #ifdef HIRES_TIMER
-        !DIR$ ASM
-        asm("rdtsc" : "=a"(Lo), "=d"(Hi));
-        !DIR$ END ASM
-        ! Bit shift to get the full 64 bit value
-        TimeEnd = shiftl(int(Hi, 8), 32) + Lo
+        TimeEnd = rdtsc()
         ! Write both times to timer log file
         WRITE(unit_number, *) Interval, 'Forward MPI Sendrecv', TimeStart, TimeEnd
-
-        !DIR$ ASM
-        asm("rdtsc" : "=a"(Lo), "=d"(Hi));
-        !DIR$ END ASM
-        ! Bit shift to get the full 64 bit value
-        TimeStart = shiftl(int(Hi, 8), 32) + Lo
+        
+        TimeStart = rdtsc()
 #endif
 
         ! Unpack the columns from the *_recv arrays to the *_1D arrays
@@ -1209,19 +1199,11 @@ CONTAINS
             END DO
         END DO
 #ifdef HIRES_TIMER
-        !DIR$ ASM
-        asm("rdtsc" : "=a"(Lo), "=d"(Hi));
-        !DIR$ END ASM
-        ! Bit shift to get the full 64 bit value
-        TimeEnd = shiftl(int(Hi, 8), 32) + Lo
+        TimeEnd = rdtsc()
         ! Write both times to timer log file
         WRITE(unit_number, *) Interval, 'Forward unpack', TimeStart, TimeEnd
-
-        !DIR$ ASM
-        asm("rdtsc" : "=a"(Lo), "=d"(Hi));
-        !DIR$ END ASM
-        ! Bit shift to get the full 64 bit value
-        TimeStart = shiftl(int(Hi, 8), 32) + Lo
+        
+        TimeStart = rdtsc()
 #endif
     ENDIF
 #endif
@@ -1430,19 +1412,11 @@ CONTAINS
     ! Skip reverse load balancing if we are not moving any cells, i.e. target_PET = -1
     IF (reassignment_data(interval)%next_PET /= -1) THEN
 #ifdef HIRES_TIMER
-        !DIR$ ASM
-        asm("rdtsc" : "=a"(Lo), "=d"(Hi));
-        !DIR$ END ASM
-        ! Bit shift to get the full 64 bit value
-        TimeEnd = shiftl(int(Hi, 8), 32) + Lo
+        TimeEnd = rdtsc()
         ! Write both times to timer log file
         WRITE(unit_number, *) Interval, 'Inbetween', TimeStart, TimeEnd
-
-        !DIR$ ASM
-        asm("rdtsc" : "=a"(Lo), "=d"(Hi));
-        !DIR$ END ASM
-        ! Bit shift to get the full 64 bit value
-        TimeStart = shiftl(int(Hi, 8), 32) + Lo
+       
+        TimeStart = rdtsc()
 #endif
         ! Gather the columns to be swapped to the *_recv arrays
         DO I_CELL = 1, State_Grid%NZ
@@ -1454,19 +1428,11 @@ CONTAINS
             END DO
         END DO
 #ifdef HIRES_TIMER
-        !DIR$ ASM
-        asm("rdtsc" : "=a"(Lo), "=d"(Hi));
-        !DIR$ END ASM
-        ! Bit shift to get the full 64 bit value
-        TimeEnd = shiftl(int(Hi, 8), 32) + Lo
+        TimeEnd = rdtsc()
         ! Write both times to timer log file
         WRITE(unit_number, *) Interval, 'Reverse pack', TimeStart, TimeEnd
 
-        !DIR$ ASM
-        asm("rdtsc" : "=a"(Lo), "=d"(Hi));
-        !DIR$ END ASM
-        ! Bit shift to get the full 64 bit value
-        TimeStart = shiftl(int(Hi, 8), 32) + Lo
+        TimeStart = rdtsc()
 #endif
         ! Pass the actual data
         CALL MPI_Sendrecv( &
@@ -1497,19 +1463,11 @@ CONTAINS
             reassignment_data(interval)%prev_PET, 7, &
             Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
 #ifdef HIRES_TIMER
-        !DIR$ ASM
-        asm("rdtsc" : "=a"(Lo), "=d"(Hi));
-        !DIR$ END ASM
-        ! Bit shift to get the full 64 bit value
-        TimeEnd = shiftl(int(Hi, 8), 32) + Lo
+        TimeEnd = rdtsc()
         ! Write both times to timer log file
         WRITE(unit_number, *) Interval, 'Reverse MPI Sendrecv', TimeStart, TimeEnd
-
-        !DIR$ ASM
-        asm("rdtsc" : "=a"(Lo), "=d"(Hi));
-        !DIR$ END ASM
-        ! Bit shift to get the full 64 bit value
-        TimeStart = shiftl(int(Hi, 8), 32) + Lo
+        
+        TimeStart = rdtsc()
 #endif
         ! Unpack the columns from the *_send arrays
         DO I_CELL = 1, State_Grid%NZ
@@ -1521,11 +1479,7 @@ CONTAINS
             END DO
         END DO
 #ifdef HIRES_TIMER
-        !DIR$ ASM
-        asm("rdtsc" : "=a"(Lo), "=d"(Hi));
-        !DIR$ END ASM
-        ! Bit shift to get the full 64 bit value
-        TimeEnd = shiftl(int(Hi, 8), 32) + Lo
+        TimeEnd = rdtsc()
         ! Write both times to timer log file
         WRITE(unit_number, *) Interval, 'Reverse Unpack', TimeStart, TimeEnd
 #endif

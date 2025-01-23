@@ -36,6 +36,7 @@ endif()
 #-----------------------------------------------------------------------------
 # Define libGeosCore.a
 #-----------------------------------------------------------------------------
+set(RDTSC TRUE)
 add_library(GeosCore
   STATIC EXCLUDE_FROM_ALL
   aero_drydep.F90
@@ -106,6 +107,7 @@ add_library(GeosCore
   $<$<BOOL:${RRTMG}>:rrtmg_rad_transfer_mod.F90>
   $<$<BOOL:${TOMAS}>:tomas_mod.F90>
   $<$<BOOL:${APM}>:apm_driv_mod.F90>
+  $<$<BOOL:${RDTSC}>:rdtsc.c>
   # exchange_mod : TODO
 )
 
