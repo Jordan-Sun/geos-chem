@@ -50,7 +50,7 @@ MODULE FullChem_Mod
   INTEGER               :: id_OH,  id_HO2,  id_O3P,  id_O1D, id_CH4
   INTEGER               :: id_PCO, id_LCH4, id_NH3,  id_SO4
   INTEGER               :: id_SALAAL, id_SALCAL, id_SALC, id_SALA
-  INTEGER               :: NCELL_max
+  INTEGER               :: NCELL_MAX
 #ifdef MODEL_GEOS
   INTEGER               :: id_O3
   INTEGER               :: id_A3O2, id_ATO2, id_B3O2, id_BRO2
@@ -3027,7 +3027,7 @@ CONTAINS
         RETURN
     END IF
     ! Read the first line which should be the number of intervals
-    READ(unit_number, *, IOSTAT=RC) nIntervals, lineLength, NCELL_max
+    READ(unit_number, *, IOSTAT=RC) nIntervals, lineLength
     IF (RC /= 0) THEN
         CALL GC_Error( 'Error reading reassignment file', RC, ThisLoc )
         RETURN
@@ -3087,8 +3087,8 @@ CONTAINS
     CLOSE(unit_number)
 
     ! What is the largest number of cells any one PET should handle?
-    ! Multiply by the number of vertical levels to get the total number of cells
-    NCELL_max = NCELL_max * State_Grid%NZ
+    ! TODO: add MPI logic to figure this out
+    NCELL_max = (State_Grid%NX * State_Grid%NY * State_Grid%NZ)
     ! NCELL_max:   Max number of cells to be computed on any domain
     CALL Timer_Add("     Integrate 1",         RC )
 
