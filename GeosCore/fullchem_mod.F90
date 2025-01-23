@@ -11,6 +11,7 @@
 !\\
 ! !INTERFACE:
 !
+#define HIRES_TIMER
 MODULE FullChem_Mod
 !
 ! !USES:
@@ -255,6 +256,10 @@ CONTAINS
     REAL(f4)               :: TROP_NOx_Tau
     REAL(f4)               :: TROPv_NOx_tau(State_Grid%NX,State_Grid%NY)
     REAL(f4)               :: TROPv_NOx_mass(State_Grid%NX,State_Grid%NY)
+#endif
+#ifdef HIRES_TIMER
+    INTEGER(8)             :: TimeStart, TimeEnd
+    INTEGER(4)             :: Hi, Lo    ! Placeholder for assembly read
 #endif
 
     ! Grid box integration time diagnostic
@@ -1119,6 +1124,13 @@ CONTAINS
 
     ! Skip load balancing if we are not moving any cells, i.e. next_PET = -1
     IF (reassignment_data(interval)%next_PET /= -1) THEN
+#ifdef HIRES_TIMER
+        !DIR$ ASM
+        asm("rdtsc" : "=a"(Lo), "=d"(Hi));
+        !DIR$ END ASM
+        ! Bit shift to get the full 64 bit value
+        TimeStart = shiftl(int(Hi, 8), 32) + Lo
+#endif
         ! Copy the columns from the *_1D arrays to the *_send arrays
         DO I_CELL = 1, State_Grid%NZ
             DO i = 1, reassignment_data(interval)%NCELL_moving
@@ -1128,7 +1140,21 @@ CONTAINS
                 R_send(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = RCNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
             END DO
         END DO
-
+#ifdef HIRES_TIMER
+        !DIR$ ASM
+        asm("rdtsc" : "=a"(Lo), "=d"(Hi));
+        !DIR$ END ASM
+        ! Bit shift to get the full 64 bit value
+        TimeEnd = shiftl(int(Hi, 8), 32) + Lo
+        ! Write both times to timer log file
+        WRITE(unit_number, *) Interval, 'Forward pack', TimeStart, TimeEnd
+        
+        !DIR$ ASM
+        asm("rdtsc" : "=a"(Lo), "=d"(Hi));
+        !DIR$ END ASM
+        ! Bit shift to get the full 64 bit value
+        TimeStart = shiftl(int(Hi, 8), 32) + Lo
+#endif
         ! Pass the actual data
         CALL MPI_Sendrecv( &
             C_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
@@ -1157,6 +1183,21 @@ CONTAINS
             R_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
             reassignment_data(interval)%next_PET, 3, &
             Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
+#ifdef HIRES_TIMER
+        !DIR$ ASM
+        asm("rdtsc" : "=a"(Lo), "=d"(Hi));
+        !DIR$ END ASM
+        ! Bit shift to get the full 64 bit value
+        TimeEnd = shiftl(int(Hi, 8), 32) + Lo
+        ! Write both times to timer log file
+        WRITE(unit_number, *) Interval, 'Forward MPI Sendrecv', TimeStart, TimeEnd
+
+        !DIR$ ASM
+        asm("rdtsc" : "=a"(Lo), "=d"(Hi));
+        !DIR$ END ASM
+        ! Bit shift to get the full 64 bit value
+        TimeStart = shiftl(int(Hi, 8), 32) + Lo
+#endif
 
         ! Unpack the columns from the *_recv arrays to the *_1D arrays
         DO I_CELL = 1, State_Grid%NZ
@@ -1167,6 +1208,21 @@ CONTAINS
                 RCNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = R_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i)
             END DO
         END DO
+#ifdef HIRES_TIMER
+        !DIR$ ASM
+        asm("rdtsc" : "=a"(Lo), "=d"(Hi));
+        !DIR$ END ASM
+        ! Bit shift to get the full 64 bit value
+        TimeEnd = shiftl(int(Hi, 8), 32) + Lo
+        ! Write both times to timer log file
+        WRITE(unit_number, *) Interval, 'Forward unpack', TimeStart, TimeEnd
+
+        !DIR$ ASM
+        asm("rdtsc" : "=a"(Lo), "=d"(Hi));
+        !DIR$ END ASM
+        ! Bit shift to get the full 64 bit value
+        TimeStart = shiftl(int(Hi, 8), 32) + Lo
+#endif
     ENDIF
 #endif
     !$OMP PARALLEL DO                                                        &
@@ -1373,6 +1429,21 @@ CONTAINS
 #ifdef MODEL_GCHPCTM
     ! Skip reverse load balancing if we are not moving any cells, i.e. target_PET = -1
     IF (reassignment_data(interval)%next_PET /= -1) THEN
+#ifdef HIRES_TIMER
+        !DIR$ ASM
+        asm("rdtsc" : "=a"(Lo), "=d"(Hi));
+        !DIR$ END ASM
+        ! Bit shift to get the full 64 bit value
+        TimeEnd = shiftl(int(Hi, 8), 32) + Lo
+        ! Write both times to timer log file
+        WRITE(unit_number, *) Interval, 'Inbetween', TimeStart, TimeEnd
+
+        !DIR$ ASM
+        asm("rdtsc" : "=a"(Lo), "=d"(Hi));
+        !DIR$ END ASM
+        ! Bit shift to get the full 64 bit value
+        TimeStart = shiftl(int(Hi, 8), 32) + Lo
+#endif
         ! Gather the columns to be swapped to the *_recv arrays
         DO I_CELL = 1, State_Grid%NZ
             DO i = 1, reassignment_data(interval)%NCELL_moving
@@ -1382,7 +1453,21 @@ CONTAINS
                 R_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = RSTATE_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
             END DO
         END DO
+#ifdef HIRES_TIMER
+        !DIR$ ASM
+        asm("rdtsc" : "=a"(Lo), "=d"(Hi));
+        !DIR$ END ASM
+        ! Bit shift to get the full 64 bit value
+        TimeEnd = shiftl(int(Hi, 8), 32) + Lo
+        ! Write both times to timer log file
+        WRITE(unit_number, *) Interval, 'Reverse pack', TimeStart, TimeEnd
 
+        !DIR$ ASM
+        asm("rdtsc" : "=a"(Lo), "=d"(Hi));
+        !DIR$ END ASM
+        ! Bit shift to get the full 64 bit value
+        TimeStart = shiftl(int(Hi, 8), 32) + Lo
+#endif
         ! Pass the actual data
         CALL MPI_Sendrecv( &
             C_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
@@ -1411,8 +1496,21 @@ CONTAINS
             R_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
             reassignment_data(interval)%prev_PET, 7, &
             Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
+#ifdef HIRES_TIMER
+        !DIR$ ASM
+        asm("rdtsc" : "=a"(Lo), "=d"(Hi));
+        !DIR$ END ASM
+        ! Bit shift to get the full 64 bit value
+        TimeEnd = shiftl(int(Hi, 8), 32) + Lo
+        ! Write both times to timer log file
+        WRITE(unit_number, *) Interval, 'Reverse MPI Sendrecv', TimeStart, TimeEnd
 
-
+        !DIR$ ASM
+        asm("rdtsc" : "=a"(Lo), "=d"(Hi));
+        !DIR$ END ASM
+        ! Bit shift to get the full 64 bit value
+        TimeStart = shiftl(int(Hi, 8), 32) + Lo
+#endif
         ! Unpack the columns from the *_send arrays
         DO I_CELL = 1, State_Grid%NZ
             DO i = 1, reassignment_data(interval)%NCELL_moving
@@ -1422,6 +1520,15 @@ CONTAINS
                 RSTATE_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = R_send(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i)
             END DO
         END DO
+#ifdef HIRES_TIMER
+        !DIR$ ASM
+        asm("rdtsc" : "=a"(Lo), "=d"(Hi));
+        !DIR$ END ASM
+        ! Bit shift to get the full 64 bit value
+        TimeEnd = shiftl(int(Hi, 8), 32) + Lo
+        ! Write both times to timer log file
+        WRITE(unit_number, *) Interval, 'Reverse Unpack', TimeStart, TimeEnd
+#endif
     ENDIF
 #endif
     
@@ -3086,6 +3193,19 @@ CONTAINS
 
     CLOSE(unit_number)
 
+    ! If timer is enabled, open a log file to write the timer data
+#ifdef HIRES_TIMER
+    ! Use write to concatenate strings for the log file path
+    WRITE(AssignmentPath, '(A, A, I0, A)') TRIM(HomeDir), '/timer/timer_', Input_Opt%thisCPU, '.log'
+    ! Open the log file
+    OPEN(unit=unit_number, file=AssignmentPath, status='replace', action='write', iostat=RC)
+    IF (RC /= 0) THEN
+        CALL GC_Error( 'Error opening timer log file', RC, ThisLoc )
+        RETURN
+    END IF
+#endif
+
+
     ! What is the largest number of cells any one PET should handle?
     ! TODO: add MPI logic to figure this out
     NCELL_max = (State_Grid%NX * State_Grid%NY * State_Grid%NZ)
@@ -3358,6 +3478,11 @@ CONTAINS
        CALL GC_CheckVar( 'fullchem_mod.F90:reassignment_data', 2, RC )
        IF ( RC /= GC_SUCCESS ) RETURN
     ENDIF
+
+#ifdef HIRES_TIMER
+    ! Close the timer log file
+    CLOSE(unit_number)
+#endif
   END SUBROUTINE Cleanup_FullChem
 !EOC
 END MODULE FullChem_Mod
