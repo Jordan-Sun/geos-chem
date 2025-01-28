@@ -11,7 +11,7 @@
 !\\
 ! !INTERFACE:
 !
-#define HIRES_TIMER
+! #define HIRES_TIMER
 MODULE FullChem_Mod
 !
 ! !USES:
@@ -1149,42 +1149,54 @@ CONTAINS
 #ifdef HIRES_TIMER
         TimerEnd = rdtsc()
         ! Write both times to timer log file
-        WRITE(unit_number, *) Interval, 'Forward pack', TimerStart, TimerEnd
+        WRITE(unit_number, *) Interval, 'ForwardPacking', TimerStart, TimerEnd
         
         TimerStart = rdtsc()
 #endif
-        ! Pass the actual data
-        CALL MPI_Sendrecv( &
-            C_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
-            reassignment_data(interval)%prev_PET, 0, &
-            C_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
-            reassignment_data(interval)%next_PET, 0, &
-            Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
-
-        CALL MPI_Sendrecv( &
-            RCONST_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
-            reassignment_data(interval)%prev_PET, 1, &
-            RCONST_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
-            reassignment_data(interval)%next_PET, 1, &
-            Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
-
-        CALL MPI_Sendrecv( &
-            I_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
-            reassignment_data(interval)%prev_PET, 2, &
-            I_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
-            reassignment_data(interval)%next_PET, 2, &
-            Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
-
-        CALL MPI_Sendrecv( &
-            R_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
-            reassignment_data(interval)%prev_PET, 3, &
-            R_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
-            reassignment_data(interval)%next_PET, 3, &
-            Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
+      ! Pass the actual data
+      CALL MPI_Isend( &
+          C_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
+          reassignment_data(interval)%next_PET, 0, &
+          Input_Opt%mpiComm, request, RC)
+      CALL MPI_Isend( &
+          RCONST_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
+          reassignment_data(interval)%next_PET, 1, &
+          Input_Opt%mpiComm, request, RC)
+      CALL MPI_Isend( &
+          I_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
+          reassignment_data(interval)%next_PET, 2, &
+          Input_Opt%mpiComm, request, RC)
+      CALL MPI_Isend( &
+          R_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
+          reassignment_data(interval)%next_PET, 3, &
+          Input_Opt%mpiComm, request, RC)
 #ifdef HIRES_TIMER
         TimerEnd = rdtsc()
         ! Write both times to timer log file
-        WRITE(unit_number, *) Interval, 'Forward MPI Sendrecv', TimerStart, TimerEnd
+        WRITE(unit_number, *) Interval, 'ForwardIsend', TimerStart, TimerEnd
+        
+        TimerStart = rdtsc()
+#endif
+      CALL MPI_Recv( &
+          C_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
+          reassignment_data(interval)%prev_PET, 0, &
+          Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
+      CALL MPI_Recv( &
+          RCONST_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
+          reassignment_data(interval)%prev_PET, 1, &
+          Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
+      CALL MPI_Recv( &
+          I_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
+          reassignment_data(interval)%prev_PET, 2, &
+          Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
+      CALL MPI_Recv( &
+          R_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
+          reassignment_data(interval)%prev_PET, 3, &
+          Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
+#ifdef HIRES_TIMER
+        TimerEnd = rdtsc()
+        ! Write both times to timer log file
+        WRITE(unit_number, *) Interval, 'ForwardRecv', TimerStart, TimerEnd
         
         TimerStart = rdtsc()
 #endif
@@ -1201,11 +1213,14 @@ CONTAINS
 #ifdef HIRES_TIMER
         TimerEnd = rdtsc()
         ! Write both times to timer log file
-        WRITE(unit_number, *) Interval, 'Forward unpack', TimerStart, TimerEnd
-        
-        TimerStart = rdtsc()
+        WRITE(unit_number, *) Interval, 'ForwardUnpacking', TimerStart, TimerEnd
 #endif
     ENDIF
+#ifdef HIRES_TIMER
+        ! Always time the inbetween section
+        TimerStart = rdtsc()
+#endif
+
 #endif
     !$OMP PARALLEL DO                                                        &
     !$OMP DEFAULT( SHARED                                                   )&
@@ -1409,13 +1424,15 @@ CONTAINS
     ENDDO
 
 #ifdef MODEL_GCHPCTM
+#ifdef HIRES_TIMER
+    ! Always time the inbetween section
+    TimerEnd = rdtsc()
+    ! Write both times to timer log file
+    WRITE(unit_number, *) Interval, 'Inbetween', TimerStart, TimerEnd
+#endif
     ! Skip reverse load balancing if we are not moving any cells, i.e. target_PET = -1
     IF (reassignment_data(interval)%next_PET /= -1) THEN
 #ifdef HIRES_TIMER
-        TimerEnd = rdtsc()
-        ! Write both times to timer log file
-        WRITE(unit_number, *) Interval, 'Inbetween', TimerStart, TimerEnd
-       
         TimerStart = rdtsc()
 #endif
         ! Gather the columns to be swapped to the *_recv arrays
@@ -1430,42 +1447,56 @@ CONTAINS
 #ifdef HIRES_TIMER
         TimerEnd = rdtsc()
         ! Write both times to timer log file
-        WRITE(unit_number, *) Interval, 'Reverse pack', TimerStart, TimerEnd
+        WRITE(unit_number, *) Interval, 'ReversePacking', TimerStart, TimerEnd
 
         TimerStart = rdtsc()
 #endif
-        ! Pass the actual data
-        CALL MPI_Sendrecv( &
-            C_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
-            reassignment_data(interval)%next_PET, 4, &
-            C_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
-            reassignment_data(interval)%prev_PET, 4, &
-            Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
+      ! Pass the actual data
+      CALL MPI_Isend( &
+          C_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
+          reassignment_data(interval)%prev_PET, 4, &
+          Input_Opt%mpiComm, request, RC)
+      CALL MPI_Isend( &
+          RCONST_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
+          reassignment_data(interval)%prev_PET, 5, &
+          Input_Opt%mpiComm, request, RC)
+      CALL MPI_Isend( &
+          I_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
+          reassignment_data(interval)%prev_PET, 6, &
+          Input_Opt%mpiComm, request, RC)
 
-        CALL MPI_Sendrecv( &
-            RCONST_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
-            reassignment_data(interval)%next_PET, 5, &
-            RCONST_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
-            reassignment_data(interval)%prev_PET, 5, &
-            Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
-
-        CALL MPI_Sendrecv( &
-            I_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
-            reassignment_data(interval)%next_PET, 6, &
-            I_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
-            reassignment_data(interval)%prev_PET, 6, &
-            Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
-
-        CALL MPI_Sendrecv( &
-            R_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
-            reassignment_data(interval)%next_PET, 7, &
-            R_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
-            reassignment_data(interval)%prev_PET, 7, &
-            Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
+      CALL MPI_Isend( &
+          R_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
+          reassignment_data(interval)%prev_PET, 7, &
+          Input_Opt%mpiComm, request, RC)
 #ifdef HIRES_TIMER
         TimerEnd = rdtsc()
         ! Write both times to timer log file
-        WRITE(unit_number, *) Interval, 'Reverse MPI Sendrecv', TimerStart, TimerEnd
+        WRITE(unit_number, *) Interval, 'ReverseIsend', TimerStart, TimerEnd
+        
+        TimerStart = rdtsc()
+#endif
+      CALL MPI_Recv( &
+          C_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
+          reassignment_data(interval)%next_PET, 4, &
+          Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
+      CALL MPI_Recv( &
+          RCONST_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
+          reassignment_data(interval)%next_PET, 5, &
+          Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
+
+      CALL MPI_Recv( &
+          I_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
+          reassignment_data(interval)%next_PET, 6, &
+          Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
+      CALL MPI_Recv( &
+          R_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
+          reassignment_data(interval)%next_PET, 7, &
+          Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
+#ifdef HIRES_TIMER
+        TimerEnd = rdtsc()
+        ! Write both times to timer log file
+        WRITE(unit_number, *) Interval, 'ReverseRecv', TimerStart, TimerEnd
         
         TimerStart = rdtsc()
 #endif
@@ -1481,7 +1512,7 @@ CONTAINS
 #ifdef HIRES_TIMER
         TimerEnd = rdtsc()
         ! Write both times to timer log file
-        WRITE(unit_number, *) Interval, 'Reverse Unpack', TimerStart, TimerEnd
+        WRITE(unit_number, *) Interval, 'ReverseUnpacking', TimerStart, TimerEnd
 #endif
     ENDIF
 #endif
