@@ -1156,19 +1156,19 @@ CONTAINS
       ! Pass the actual data
       CALL MPI_Isend( &
           C_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%prev_PET, 0, &
+          reassignment_data(interval)%next_PET, 0, &
           Input_Opt%mpiComm, request, RC)
       CALL MPI_Isend( &
           RCONST_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%prev_PET, 1, &
+          reassignment_data(interval)%next_PET, 1, &
           Input_Opt%mpiComm, request, RC)
       CALL MPI_Isend( &
           I_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
-          reassignment_data(interval)%prev_PET, 2, &
+          reassignment_data(interval)%next_PET, 2, &
           Input_Opt%mpiComm, request, RC)
       CALL MPI_Isend( &
           R_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%prev_PET, 3, &
+          reassignment_data(interval)%next_PET, 3, &
           Input_Opt%mpiComm, request, RC)
 #ifdef HIRES_TIMER
         TimerEnd = rdtsc()
@@ -1179,19 +1179,19 @@ CONTAINS
 #endif
       CALL MPI_Recv( &
           C_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%next_PET, 0, &
+          reassignment_data(interval)%prev_PET, 0, &
           Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
       CALL MPI_Recv( &
           RCONST_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%next_PET, 1, &
+          reassignment_data(interval)%prev_PET, 1, &
           Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
       CALL MPI_Recv( &
           I_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
-          reassignment_data(interval)%next_PET, 2, &
+          reassignment_data(interval)%prev_PET, 2, &
           Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
       CALL MPI_Recv( &
           R_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%next_PET, 3, &
+          reassignment_data(interval)%prev_PET, 3, &
           Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
 #ifdef HIRES_TIMER
         TimerEnd = rdtsc()
@@ -1454,20 +1454,20 @@ CONTAINS
       ! Pass the actual data
       CALL MPI_Isend( &
           C_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%next_PET, 4, &
+          reassignment_data(interval)%prev_PET, 4, &
           Input_Opt%mpiComm, request, RC)
       CALL MPI_Isend( &
           RCONST_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%next_PET, 5, &
+          reassignment_data(interval)%prev_PET, 5, &
           Input_Opt%mpiComm, request, RC)
       CALL MPI_Isend( &
           I_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
-          reassignment_data(interval)%next_PET, 6, &
+          reassignment_data(interval)%prev_PET, 6, &
           Input_Opt%mpiComm, request, RC)
 
       CALL MPI_Isend( &
           R_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%next_PET, 7, &
+          reassignment_data(interval)%prev_PET, 7, &
           Input_Opt%mpiComm, request, RC)
 #ifdef HIRES_TIMER
         TimerEnd = rdtsc()
@@ -1478,20 +1478,20 @@ CONTAINS
 #endif
       CALL MPI_Recv( &
           C_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%prev_PET, 4, &
+          reassignment_data(interval)%next_PET, 4, &
           Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
       CALL MPI_Recv( &
           RCONST_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%prev_PET, 5, &
+          reassignment_data(interval)%next_PET, 5, &
           Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
 
       CALL MPI_Recv( &
           I_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
-          reassignment_data(interval)%prev_PET, 6, &
+          reassignment_data(interval)%next_PET, 6, &
           Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
       CALL MPI_Recv( &
           R_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%prev_PET, 7, &
+          reassignment_data(interval)%next_PET, 7, &
           Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
 #ifdef HIRES_TIMER
         TimerEnd = rdtsc()
