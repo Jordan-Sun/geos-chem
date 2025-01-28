@@ -11,7 +11,7 @@
 !\\
 ! !INTERFACE:
 !
-#define HIRES_TIMER
+! #define HIRES_TIMER
 MODULE FullChem_Mod
 !
 ! !USES:
