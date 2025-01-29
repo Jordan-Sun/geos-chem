@@ -11,7 +11,7 @@
 !\\
 ! !INTERFACE:
 !
-! #define HIRES_TIMER
+#define HIRES_TIMER
 MODULE FullChem_Mod
 !
 ! !USES:
@@ -1127,6 +1127,14 @@ CONTAINS
     RSTATE_1D        = 0.0e+0_fp
 
 #ifdef MODEL_GCHPCTM 
+#ifdef HIRES_TIMER
+    ! Start a barrier so our time is synchronized
+    TimerStart = rdtsc()
+    CALL MPI_Barrier(Input_Opt%mpiComm, RC)
+    TimerEnd = rdtsc()
+    ! Write both times to timer log file
+    WRITE(unit_number, *) Interval, 'ForwardBarrier', TimerStart, TimerEnd
+#endif
     ! Increment the interval counter
     interval = interval + 1
     ! Since we are only swapping columns, the number of cells in the balanced domain is the same as the local domain
@@ -1515,6 +1523,14 @@ CONTAINS
         WRITE(unit_number, *) Interval, 'ReverseUnpacking', TimerStart, TimerEnd
 #endif
     ENDIF
+#ifdef HIRES_TIMER
+    ! Start a barrier so our time is synchronized
+    TimerStart = rdtsc()
+    CALL MPI_Barrier(Input_Opt%mpiComm, RC)
+    TimerEnd = rdtsc()
+    ! Write both times to timer log file
+    WRITE(unit_number, *) Interval, 'ReverseBarrier', TimerStart, TimerEnd
+#endif
 #endif
     
     DO L = 1, State_Grid%NZ
