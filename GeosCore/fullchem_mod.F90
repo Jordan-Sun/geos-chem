@@ -373,6 +373,17 @@ CONTAINS
     ENDIF
 #endif
 
+#ifdef HIRES_TIMER
+    ! Start a barrier so our time is synchronized
+    TimerStart = rdtsc()
+#endif
+    CALL MPI_Barrier(Input_Opt%mpiComm, RC)
+#ifdef HIRES_TIMER
+    TimerEnd = rdtsc()
+    ! Write both times to timer log file
+    WRITE(unit_number, *) Interval, 'InitBarrier', TimerStart, TimerEnd
+#endif
+
     !========================================================================
     ! Zero out certain species:
     !    - isoprene oxidation counter species (dkh, bmy, 6/1/06)
@@ -1130,7 +1141,9 @@ CONTAINS
 #ifdef HIRES_TIMER
     ! Start a barrier so our time is synchronized
     TimerStart = rdtsc()
+#endif
     CALL MPI_Barrier(Input_Opt%mpiComm, RC)
+#ifdef HIRES_TIMER
     TimerEnd = rdtsc()
     ! Write both times to timer log file
     WRITE(unit_number, *) Interval, 'ForwardBarrier', TimerStart, TimerEnd
@@ -1526,7 +1539,9 @@ CONTAINS
 #ifdef HIRES_TIMER
     ! Start a barrier so our time is synchronized
     TimerStart = rdtsc()
+#endif
     CALL MPI_Barrier(Input_Opt%mpiComm, RC)
+#ifdef HIRES_TIMER
     TimerEnd = rdtsc()
     ! Write both times to timer log file
     WRITE(unit_number, *) Interval, 'ReverseBarrier', TimerStart, TimerEnd
