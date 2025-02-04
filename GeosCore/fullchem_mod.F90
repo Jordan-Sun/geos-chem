@@ -373,6 +373,7 @@ CONTAINS
     ENDIF
 #endif
 
+#ifdef MODEL_GCHPCTM 
     ! Increment the interval counter
     interval = interval + 1
     ! Since we are only swapping columns, the number of cells in the balanced domain is the same as the local domain
@@ -474,6 +475,7 @@ CONTAINS
 #ifdef HIRES_TIMER
         ! Always time the inbetween section
         TimerStart = rdtsc()
+#endif
 #endif
 
     !========================================================================
@@ -1229,9 +1231,8 @@ CONTAINS
     ISTATUS_1D       = 0.0e+0_fp
     RSTATE_1D        = 0.0e+0_fp
 
-! Forward load balancing was here
+    ! Forward load balancing was here
 
-#endif
     !$OMP PARALLEL DO                                                        &
     !$OMP DEFAULT( SHARED                                                   )&
     !$OMP PRIVATE( I,        J,        L,       N                           )&
