@@ -373,6 +373,10 @@ CONTAINS
     ENDIF
 #endif
 
+    ! Increment the interval counter
+    interval = interval + 1
+    ! Since we are only swapping columns, the number of cells in the balanced domain is the same as the local domain
+    this_PET = Input_Opt%thisCPU
 #ifdef HIRES_TIMER
     ! Start a barrier so our time is synchronized
     TimerStart = rdtsc()
@@ -382,6 +386,94 @@ CONTAINS
     TimerEnd = rdtsc()
     ! Write both times to timer log file
     WRITE(unit_number, *) Interval, 'InitBarrier', TimerStart, TimerEnd
+#endif
+    ! Skip load balancing if we are not moving any cells, i.e. next_PET = -1
+    IF (reassignment_data(interval)%next_PET /= -1) THEN
+#ifdef HIRES_TIMER
+        TimerStart = rdtsc()
+#endif
+        ! Copy the columns from the *_1D arrays to the *_send arrays
+        DO I_CELL = 1, State_Grid%NZ
+            DO i = 1, reassignment_data(interval)%NCELL_moving
+                C_send(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
+                RCONST_send(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
+                I_send(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = ICNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
+                R_send(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = RCNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
+            END DO
+        END DO
+#ifdef HIRES_TIMER
+        TimerEnd = rdtsc()
+        ! Write both times to timer log file
+        WRITE(unit_number, *) Interval, 'ForwardPacking', TimerStart, TimerEnd
+        
+        TimerStart = rdtsc()
+#endif
+      ! Pass the actual data
+      CALL MPI_Isend( &
+          C_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
+          reassignment_data(interval)%next_PET, 0, &
+          Input_Opt%mpiComm, request, RC)
+      CALL MPI_Isend( &
+          RCONST_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
+          reassignment_data(interval)%next_PET, 1, &
+          Input_Opt%mpiComm, request, RC)
+      CALL MPI_Isend( &
+          I_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
+          reassignment_data(interval)%next_PET, 2, &
+          Input_Opt%mpiComm, request, RC)
+      CALL MPI_Isend( &
+          R_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
+          reassignment_data(interval)%next_PET, 3, &
+          Input_Opt%mpiComm, request, RC)
+#ifdef HIRES_TIMER
+        TimerEnd = rdtsc()
+        ! Write both times to timer log file
+        WRITE(unit_number, *) Interval, 'ForwardIsend', TimerStart, TimerEnd
+        
+        TimerStart = rdtsc()
+#endif
+      CALL MPI_Recv( &
+          C_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
+          reassignment_data(interval)%prev_PET, 0, &
+          Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
+      CALL MPI_Recv( &
+          RCONST_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
+          reassignment_data(interval)%prev_PET, 1, &
+          Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
+      CALL MPI_Recv( &
+          I_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
+          reassignment_data(interval)%prev_PET, 2, &
+          Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
+      CALL MPI_Recv( &
+          R_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
+          reassignment_data(interval)%prev_PET, 3, &
+          Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
+#ifdef HIRES_TIMER
+        TimerEnd = rdtsc()
+        ! Write both times to timer log file
+        WRITE(unit_number, *) Interval, 'ForwardRecv', TimerStart, TimerEnd
+        
+        TimerStart = rdtsc()
+#endif
+
+        ! Unpack the columns from the *_recv arrays to the *_1D arrays
+        DO I_CELL = 1, State_Grid%NZ
+            DO i = 1, reassignment_data(interval)%NCELL_moving
+                C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = C_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i)
+                RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = RCONST_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i)
+                ICNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = I_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i)
+                RCNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = R_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i)
+            END DO
+        END DO
+#ifdef HIRES_TIMER
+        TimerEnd = rdtsc()
+        ! Write both times to timer log file
+        WRITE(unit_number, *) Interval, 'ForwardUnpacking', TimerStart, TimerEnd
+#endif
+    ENDIF
+#ifdef HIRES_TIMER
+        ! Always time the inbetween section
+        TimerStart = rdtsc()
 #endif
 
     !========================================================================
@@ -1137,110 +1229,7 @@ CONTAINS
     ISTATUS_1D       = 0.0e+0_fp
     RSTATE_1D        = 0.0e+0_fp
 
-#ifdef MODEL_GCHPCTM 
-#ifdef HIRES_TIMER
-    ! Start a barrier so our time is synchronized
-    TimerStart = rdtsc()
-#endif
-    CALL MPI_Barrier(Input_Opt%mpiComm, RC)
-#ifdef HIRES_TIMER
-    TimerEnd = rdtsc()
-    ! Write both times to timer log file
-    WRITE(unit_number, *) Interval, 'ForwardBarrier', TimerStart, TimerEnd
-#endif
-    ! Increment the interval counter
-    interval = interval + 1
-    ! Since we are only swapping columns, the number of cells in the balanced domain is the same as the local domain
-    this_PET = Input_Opt%thisCPU
-
-    ! Skip load balancing if we are not moving any cells, i.e. next_PET = -1
-    IF (reassignment_data(interval)%next_PET /= -1) THEN
-#ifdef HIRES_TIMER
-        TimerStart = rdtsc()
-#endif
-        ! Copy the columns from the *_1D arrays to the *_send arrays
-        DO I_CELL = 1, State_Grid%NZ
-            DO i = 1, reassignment_data(interval)%NCELL_moving
-                C_send(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
-                RCONST_send(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
-                I_send(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = ICNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
-                R_send(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = RCNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
-            END DO
-        END DO
-#ifdef HIRES_TIMER
-        TimerEnd = rdtsc()
-        ! Write both times to timer log file
-        WRITE(unit_number, *) Interval, 'ForwardPacking', TimerStart, TimerEnd
-        
-        TimerStart = rdtsc()
-#endif
-      ! Pass the actual data
-      CALL MPI_Isend( &
-          C_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%next_PET, 0, &
-          Input_Opt%mpiComm, request, RC)
-      CALL MPI_Isend( &
-          RCONST_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%next_PET, 1, &
-          Input_Opt%mpiComm, request, RC)
-      CALL MPI_Isend( &
-          I_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
-          reassignment_data(interval)%next_PET, 2, &
-          Input_Opt%mpiComm, request, RC)
-      CALL MPI_Isend( &
-          R_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%next_PET, 3, &
-          Input_Opt%mpiComm, request, RC)
-#ifdef HIRES_TIMER
-        TimerEnd = rdtsc()
-        ! Write both times to timer log file
-        WRITE(unit_number, *) Interval, 'ForwardIsend', TimerStart, TimerEnd
-        
-        TimerStart = rdtsc()
-#endif
-      CALL MPI_Recv( &
-          C_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%prev_PET, 0, &
-          Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
-      CALL MPI_Recv( &
-          RCONST_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%prev_PET, 1, &
-          Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
-      CALL MPI_Recv( &
-          I_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
-          reassignment_data(interval)%prev_PET, 2, &
-          Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
-      CALL MPI_Recv( &
-          R_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%prev_PET, 3, &
-          Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
-#ifdef HIRES_TIMER
-        TimerEnd = rdtsc()
-        ! Write both times to timer log file
-        WRITE(unit_number, *) Interval, 'ForwardRecv', TimerStart, TimerEnd
-        
-        TimerStart = rdtsc()
-#endif
-
-        ! Unpack the columns from the *_recv arrays to the *_1D arrays
-        DO I_CELL = 1, State_Grid%NZ
-            DO i = 1, reassignment_data(interval)%NCELL_moving
-                C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = C_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i)
-                RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = RCONST_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i)
-                ICNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = I_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i)
-                RCNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = R_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i)
-            END DO
-        END DO
-#ifdef HIRES_TIMER
-        TimerEnd = rdtsc()
-        ! Write both times to timer log file
-        WRITE(unit_number, *) Interval, 'ForwardUnpacking', TimerStart, TimerEnd
-#endif
-    ENDIF
-#ifdef HIRES_TIMER
-        ! Always time the inbetween section
-        TimerStart = rdtsc()
-#endif
+! Forward load balancing was here
 
 #endif
     !$OMP PARALLEL DO                                                        &
