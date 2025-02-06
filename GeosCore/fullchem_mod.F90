@@ -1224,11 +1224,6 @@ CONTAINS
         WRITE(unit_number, *) Interval, 'ForwardUnpacking', TimerStart, TimerEnd
 #endif
     ENDIF
-#ifdef HIRES_TIMER
-        ! Always time the inbetween section
-        TimerStart = rdtsc()
-#endif
-
 #endif
     ! Forward load balancing was here
 
@@ -1248,7 +1243,10 @@ CONTAINS
     !$OMP SCHEDULE( DYNAMIC, 24                                             )&
     !$OMP REDUCTION( +:errorCount                                           )
     DO I_CELL = 1, NCELL_local
-
+#ifdef HIRES_TIMER
+        ! Time each cell in the inbetween step
+        TimerStart = rdtsc()
+#endif
        ! Skip to the end of the loop if we have failed integration twice
        IF ( Failed2x ) CYCLE
 
@@ -1431,15 +1429,16 @@ CONTAINS
        ! Copy C back into C_1D
        C_1D(:,I_CELL) = C(:)
        RCONST_1D(:,I_CELL) = RCONST(:)
+       
+
+#ifdef HIRES_TIMER
+        TimerEnd = rdtsc()
+        ! Write both times to timer log file
+        WRITE(unit_number, *) Interval, I_CELL, TimerStart, TimerEnd
+#endif
     ENDDO
 
 #ifdef MODEL_GCHPCTM
-#ifdef HIRES_TIMER
-    ! Always time the inbetween section
-    TimerEnd = rdtsc()
-    ! Write both times to timer log file
-    WRITE(unit_number, *) Interval, 'Inbetween', TimerStart, TimerEnd
-#endif
     ! Skip reverse load balancing if we are not moving any cells, i.e. target_PET = -1
     IF (reassignment_data(interval)%next_PET /= -1) THEN
 #ifdef HIRES_TIMER
