@@ -1,6 +1,6 @@
 #include <stdint.h>
 
-uint64_t rdtsc()
+inline uint64_t rdtsc()
 {
     uint32_t lo, hi;
     __asm__ __volatile__(

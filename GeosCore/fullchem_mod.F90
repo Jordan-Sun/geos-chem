@@ -26,8 +26,7 @@ MODULE FullChem_Mod
 #ifdef HIRES_TIMER
   INTERFACE
     FUNCTION rdtsc() bind(C, name="rdtsc")
-      USE iso_c_binding
-      INTEGER(c_int64_t) :: rdtsc
+      INTEGER(8) :: rdtsc
     END FUNCTION rdtsc
   END INTERFACE
 #endif
