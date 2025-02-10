@@ -17,9 +17,6 @@ MODULE FullChem_Mod
 ! !USES:
 !
   USE Precision_Mod
-#ifdef HIRES_TIMER
-  USE iso_c_binding
-#endif
 
   IMPLICIT NONE
 
