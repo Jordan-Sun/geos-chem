@@ -1431,7 +1431,22 @@ CONTAINS
         WRITE(unit_number, *) Interval, 'ForwardUnpacking', TimerStart, TimerEnd
 #endif
 
-        ! Work for load balancing
+        ! Process the cells which have been swapped and received data from another PET
+        !$OMP PARALLEL DO                                                        &
+        !$OMP DEFAULT( SHARED                                                   )&
+        !$OMP PRIVATE( I,        J,        L,       N                           )&
+        !$OMP PRIVATE( ICNTRL,   C_before_integrate                             )&
+        !$OMP PRIVATE( SO4_FRAC, IERR,     RCNTRL,  ISTATUS,   RSTATE           )&
+        !$OMP PRIVATE( SpcID,    KppID,    F,       P,         Vloc             )&
+        !$OMP PRIVATE( Aout,     Thread,   RC,      S,         LCH4             )&
+        !$OMP PRIVATE( OHreact,  PCO_TOT,  PCO_CH4, PCO_NMVOC, SR               )&
+        !$OMP PRIVATE( SIZE_RES, LWC                                            )&
+#ifdef MODEL_GEOS
+        !$OMP PRIVATE( NOxTau,     NOxConc, NOx_weight, NOx_tau_weighted        )&
+#endif
+        !$OMP COLLAPSE( 3                                                       )&
+        !$OMP SCHEDULE( DYNAMIC, 24                                             )&
+        !$OMP REDUCTION( +:errorCount                                           )
         DO L = 1, State_Grid%NZ
             DO i = 1, reassignment_data(interval)%NCELL_moving
 
@@ -1575,6 +1590,7 @@ CONTAINS
                         ! Make sure only one thread at a time executes this block
                         !
                         ! Set a flag to break out of loop gracefully
+                        !$OMP CRITICAL
                         ! NOTE: You can set a GDB breakpoint here to examine the error
                         Failed2x = .TRUE.
 
@@ -1596,6 +1612,7 @@ CONTAINS
                             PRINT*, RCONST(N), TRIM( ADJUSTL( EQN_NAMES(N) ) )
                         ENDDO
                         !
+                        !$OMP END CRITICAL
                         !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
                         ! Start skipping to end of loop upon 2 failures in a row
@@ -1619,6 +1636,7 @@ CONTAINS
                 RCONST_1D(:,I_CELL) = RCONST(:)
             ENDDO
         ENDDO
+        !$OMP END PARALLEL DO
 
 #ifdef HIRES_TIMER
         TimerStart = rdtsc()
