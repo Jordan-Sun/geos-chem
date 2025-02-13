@@ -1135,15 +1135,15 @@ CONTAINS
     ! Skip load balancing if we are not moving any cells, i.e. next_PET = -1
     IF (reassignment_data(interval)%next_PET /= -1) THEN
 #ifdef HIRES_TIMER
-        TimerStart = rdtsc()
+     TimerStart = rdtsc()
 #endif
         ! Copy the columns from the *_1D arrays to the *_send arrays
-        DO I_CELL = 1, State_Grid%NZ
+        DO L = 1, State_Grid%NZ
             DO i = 1, reassignment_data(interval)%NCELL_moving
-                C_send(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
-                RCONST_send(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
-                I_send(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = ICNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
-                R_send(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = RCNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
+                C_send(:, (L-1)*reassignment_data(interval)%NCELL_moving+i) = C_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
+                RCONST_send(:, (L-1)*reassignment_data(interval)%NCELL_moving+i) = RCONST_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
+                I_send(:, (L-1)*reassignment_data(interval)%NCELL_moving+i) = ICNTRL_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
+                R_send(:, (L-1)*reassignment_data(interval)%NCELL_moving+i) = RCNTRL_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
             END DO
         END DO
 #ifdef HIRES_TIMER
@@ -1153,75 +1153,31 @@ CONTAINS
         
         TimerStart = rdtsc()
 #endif
-      ! Pass the actual data
-      CALL MPI_Isend( &
-          C_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%next_PET, 0, &
-          Input_Opt%mpiComm, request, RC)
-      CALL MPI_Isend( &
-          RCONST_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%next_PET, 1, &
-          Input_Opt%mpiComm, request, RC)
-      CALL MPI_Isend( &
-          I_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
-          reassignment_data(interval)%next_PET, 2, &
-          Input_Opt%mpiComm, request, RC)
-      CALL MPI_Isend( &
-          R_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%next_PET, 3, &
-          Input_Opt%mpiComm, request, RC)
+        ! Pass the actual data
+        CALL MPI_Isend( &
+            C_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
+            reassignment_data(interval)%next_PET, 0, &
+            Input_Opt%mpiComm, request, RC)
+        CALL MPI_Isend( &
+            RCONST_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
+            reassignment_data(interval)%next_PET, 1, &
+            Input_Opt%mpiComm, request, RC)
+        CALL MPI_Isend( &
+            I_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
+            reassignment_data(interval)%next_PET, 2, &
+            Input_Opt%mpiComm, request, RC)
+        CALL MPI_Isend( &
+            R_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
+            reassignment_data(interval)%next_PET, 3, &
+            Input_Opt%mpiComm, request, RC)
 #ifdef HIRES_TIMER
         TimerEnd = rdtsc()
         ! Write both times to timer log file
         WRITE(unit_number, *) Interval, 'ForwardIsend', TimerStart, TimerEnd
-        
-        TimerStart = rdtsc()
-#endif
-      CALL MPI_Recv( &
-          C_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%prev_PET, 0, &
-          Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
-      CALL MPI_Recv( &
-          RCONST_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%prev_PET, 1, &
-          Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
-      CALL MPI_Recv( &
-          I_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
-          reassignment_data(interval)%prev_PET, 2, &
-          Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
-      CALL MPI_Recv( &
-          R_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%prev_PET, 3, &
-          Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
-#ifdef HIRES_TIMER
-        TimerEnd = rdtsc()
-        ! Write both times to timer log file
-        WRITE(unit_number, *) Interval, 'ForwardRecv', TimerStart, TimerEnd
-        
-        TimerStart = rdtsc()
-#endif
-
-        ! Unpack the columns from the *_recv arrays to the *_1D arrays
-        DO I_CELL = 1, State_Grid%NZ
-            DO i = 1, reassignment_data(interval)%NCELL_moving
-                C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = C_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i)
-                RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = RCONST_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i)
-                ICNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = I_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i)
-                RCNTRL_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = R_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i)
-            END DO
-        END DO
-#ifdef HIRES_TIMER
-        TimerEnd = rdtsc()
-        ! Write both times to timer log file
-        WRITE(unit_number, *) Interval, 'ForwardUnpacking', TimerStart, TimerEnd
 #endif
     ENDIF
-#ifdef HIRES_TIMER
-        ! Always time the inbetween section
-        TimerStart = rdtsc()
 #endif
 
-#endif
     !$OMP PARALLEL DO                                                        &
     !$OMP DEFAULT( SHARED                                                   )&
     !$OMP PRIVATE( I,        J,        L,       N                           )&
@@ -1239,276 +1195,528 @@ CONTAINS
     !$OMP REDUCTION( +:errorCount                                           )
     DO I_CELL = 1, NCELL_local
 
-       ! Skip to the end of the loop if we have failed integration twice
-       IF ( Failed2x ) CYCLE
+        ! Skip to the end of the loop if we have failed integration twice
+        IF ( Failed2x ) CYCLE
 
-       ISTATUS   = 0.0_dp                   ! Rosenbrock output
-       RSTATE    = 0.0_dp                   ! Rosenbrock output
-       IERR = 0
+#ifdef MODEL_GCHPCTM
+        ! Continue to the next cell if the current cell is marked as swapped and needs to wait for data from another PET
+        N = MOD(I_CELL, State_Grid%NX*State_Grid%NY)
+        DO i = 1, reassignment_data(interval)%NCELL_moving
+            IF ( N == reassignment_data(interval)%swap_indices(i) ) CYCLE
+        END DO
+#endif
 
-       ! Load in data from saved arrays
-       RCONST(:)   = RCONST_1D(:,I_CELL)
-       C(:)        = C_1D(:,I_CELL)
-       ICNTRL(:)   = ICNTRL_1D(:,I_CELL)
-       RCNTRL(:)   = RCNTRL_1D(:,I_CELL)
+        ISTATUS   = 0.0_dp                   ! Rosenbrock output
+        RSTATE    = 0.0_dp                   ! Rosenbrock output
+        IERR = 0
 
-       ! In case we need to reset
-       C_before_integrate(:) = C(:)
-       CALL Timer_Start( TimerName = "     Integrate 1",                  &
-       InLoop    =  .TRUE.,                             &
-       ThreadNum = Thread,                              &
-       RC        = RC                                  )
-       ! Start timer
-       IF ( Input_Opt%useTimers ) THEN
-          CALL Timer_Start( TimerName = "     Integrate 1",                  &
-                            InLoop    =  .TRUE.,                             &
-                            ThreadNum = Thread,                              &
-                            RC        = RC                                  )
-       ENDIF
+        ! Load in data from saved arrays
+        RCONST(:)   = RCONST_1D(:,I_CELL)
+        C(:)        = C_1D(:,I_CELL)
+        ICNTRL(:)   = ICNTRL_1D(:,I_CELL)
+        RCNTRL(:)   = RCNTRL_1D(:,I_CELL)
 
-       ! Call the Rosenbrock integrator
-       ! (with optional auto-reduce functionality)
-       CALL Integrate( TIN,    TOUT,    ICNTRL,                              &
-                       RCNTRL, ISTATUS, RSTATE, IERR                        )
+        ! In case we need to reset
+        C_before_integrate(:) = C(:)
+        CALL Timer_Start(   TimerName = "     Integrate 1",      &
+                            InLoop    =  .TRUE.,                 &
+                            ThreadNum = Thread,                  &
+                            RC        = RC                      )
+        ! Start timer
+        IF ( Input_Opt%useTimers ) THEN
+            CALL Timer_Start(   TimerName = "     Integrate 1",  &
+                                InLoop    =  .TRUE.,             &
+                                ThreadNum = Thread,              &
+                                RC        = RC                  )
+        ENDIF
 
-       ! Stop timer
-       IF ( Input_Opt%useTimers ) THEN
-          CALL Timer_End( TimerName = "     Integrate 1",                    &
-                          InLoop    = .TRUE.,                                &
-                          ThreadNum = Thread,                                &
-                          RC        = RC                                    )
-       ENDIF
-       CALL Timer_End( TimerName = "     Integrate 1",                    &
-       InLoop    = .TRUE.,                                &
-       ThreadNum = Thread,                                &
-       RC        = RC                                    )
-       ! Add to diagnostic arrays
-       RSTATE_1D(:,I_CELL)  = RSTATE(:)
-       ISTATUS_1D(:,I_CELL) = ISTATUS(:)
+        ! Call the Rosenbrock integrator
+        ! (with optional auto-reduce functionality)
+        CALL Integrate( TIN,    TOUT,    ICNTRL,                 &
+                        RCNTRL, ISTATUS, RSTATE, IERR           )
 
-       ! Print grid box indices to screen if integrate failed
-       IF ( IERR < 0 ) THEN
+        ! Stop timer
+        IF ( Input_Opt%useTimers ) THEN
+            CALL Timer_End( TimerName = "     Integrate 1",      &
+                            InLoop    = .TRUE.,                  &
+                            ThreadNum = Thread,                  &
+                            RC        = RC                      )
+        ENDIF
+        CALL Timer_End( TimerName = "     Integrate 1",      &
+                        InLoop    = .TRUE.,                  &
+                        ThreadNum = Thread,                  &
+                        RC        = RC                      )
+        ! Add to diagnostic arrays
+        RSTATE_1D(:,I_CELL)  = RSTATE(:)
+        ISTATUS_1D(:,I_CELL) = ISTATUS(:)
 
-          ! Turn off error output after a certain limit is reached
-          IF ( .not. doSuppress ) THEN
-             WRITE( 6, * ) '### INTEGRATE RETURNED ERROR AT: ', I, J, L
-             errorCount = errorCount + 1
-             IF ( errorCount > INTEGRATE_FAIL_TOGGLE ) THEN
-                WRITE( 6, '(a)' ) &
-                   '### Further error output has been switched off'
-                doSuppress = .TRUE.
-             ENDIF
-          ENDIF
+        ! Print grid box indices to screen if integrate failed
+        IF ( IERR < 0 ) THEN
 
-!#if defined( MODEL_GEOS ) || defined( MODEL_WRF )
-!          ! Keep track of error boxes
-!          IF ( State_Diag%Archive_KppError ) THEN
-!             State_Diag%KppError(I,J,L) = State_Diag%KppError(I,J,L) + 1.0
-!          ENDIF
-!#endif
+            ! Turn off error output after a certain limit is reached
+            IF ( .not. doSuppress ) THEN
+                WRITE( 6, * ) '### INTEGRATE RETURNED ERROR AT: ', I, J, L
+                errorCount = errorCount + 1
+                IF ( errorCount > INTEGRATE_FAIL_TOGGLE ) THEN
+                    WRITE( 6, '(a)' ) &
+                    '### Further error output has been switched off'
+                    doSuppress = .TRUE.
+                ENDIF
+            ENDIF
 
-          !=====================================================================
-          ! Try another time if it failed
-          !=====================================================================
+! #if defined( MODEL_GEOS ) || defined( MODEL_WRF )
+!             ! Keep track of error boxes
+!             IF ( State_Diag%Archive_KppError ) THEN
+!                 State_Diag%KppError(I,J,L) = State_Diag%KppError(I,J,L) + 1.0
+!             ENDIF
+! #endif
 
-          ! Zero the first time step (Hstart, used by Rosenbrock).  Also reset
-          ! C with concentrations prior to the 1st call to "Integrate".
-          RCNTRL(3) = 0.0_dp
-          C         = C_before_integrate
+            !=====================================================================
+            ! Try another time if it failed
+            !=====================================================================
 
-          ! Disable auto-reduce solver for the second iteration for safety
-          IF ( Input_Opt%Use_AutoReduce ) THEN
-             RCNTRL(12) = -1.0_dp ! without using ICNTRL
-          ENDIF
+            ! Zero the first time step (Hstart, used by Rosenbrock).  Also reset
+            ! C with concentrations prior to the 1st call to "Integrate".
+            RCNTRL(3) = 0.0_dp
+            C         = C_before_integrate
 
-          ! Update rates again
-          ! NOT POSSIBLE - relevant arrays no longer exist
-          !CALL Update_RCONST( )
-          RCONST(:) = RCONST_1D(:,I_CELL)
+            ! Disable auto-reduce solver for the second iteration for safety
+            IF ( Input_Opt%Use_AutoReduce ) THEN
+                RCNTRL(12) = -1.0_dp ! without using ICNTRL
+            ENDIF
 
-          ! Start timer
-          IF ( Input_Opt%useTimers ) THEN
-             CALL Timer_Start( TimerName = "     Integrate 2",               &
-                               InLoop    =  .TRUE.,                          &
-                               ThreadNum = Thread,                           &
-                               RC        = RC                               )
-          ENDIF
+            ! Update rates again
+            ! NOT POSSIBLE - relevant arrays no longer exist
+            !CALL Update_RCONST( )
+            RCONST(:) = RCONST_1D(:,I_CELL)
 
-          ! Call the Rosenbrock integrator (w/ auto-reduction disabled)
-          CALL Integrate( TIN,    TOUT,    ICNTRL,                           &
-                          RCNTRL, ISTATUS, RSTATE, IERR                     )
+            ! Start timer
+            IF ( Input_Opt%useTimers ) THEN
+                CALL Timer_Start( TimerName = "     Integrate 2",               &
+                                InLoop    =  .TRUE.,                          &
+                                ThreadNum = Thread,                           &
+                                RC        = RC                               )
+            ENDIF
 
-          ! Stop timer
-          IF ( Input_Opt%useTimers ) THEN
-             CALL Timer_End( TimerName = "     Integrate 2",                 &
-                             InLoop    =  .TRUE.,                            &
-                             ThreadNum = Thread,                             &
-                             RC        = RC                                 )
-          ENDIF
+            ! Call the Rosenbrock integrator (w/ auto-reduction disabled)
+            CALL Integrate( TIN,    TOUT,    ICNTRL,                           &
+                            RCNTRL, ISTATUS, RSTATE, IERR                     )
 
-          ! Again, store ISTATUS and RSTATE
-          ! ISTATUS is all counts
-          ISTATUS_1D(:,I_CELL) = ISTATUS_1D(:,I_CELL) + ISTATUS(:)
-          RSTATE_1D(:,I_CELL) = RSTATE(:)
+            ! Stop timer
+            IF ( Input_Opt%useTimers ) THEN
+                CALL Timer_End( TimerName = "     Integrate 2",                 &
+                                InLoop    =  .TRUE.,                            &
+                                ThreadNum = Thread,                             &
+                                RC        = RC                                 )
+            ENDIF
 
-          !==================================================================
-          ! Exit upon the second failure
-          !==================================================================
-          IF ( IERR < 0 ) THEN
+            ! Again, store ISTATUS and RSTATE
+            ! ISTATUS is all counts
+            ISTATUS_1D(:,I_CELL) = ISTATUS_1D(:,I_CELL) + ISTATUS(:)
+            RSTATE_1D(:,I_CELL) = RSTATE(:)
 
-             ! Print error message
-             WRITE(6,     '(a   )' ) '## INTEGRATE FAILED TWICE !!! '
-             WRITE(ERRMSG,'(a,i3)' ) 'Integrator error code :', IERR
+            !==================================================================
+            ! Exit upon the second failure
+            !==================================================================
+            IF ( IERR < 0 ) THEN
+
+                ! Print error message
+                WRITE(6,     '(a   )' ) '## INTEGRATE FAILED TWICE !!! '
+                WRITE(ERRMSG,'(a,i3)' ) 'Integrator error code :', IERR
 
 #if defined( MODEL_GEOS ) || defined( MODEL_WRF )
-             IF ( Input_Opt%KppStop ) THEN
-                CALL ERROR_STOP(ERRMSG, 'INTEGRATE_KPP')
-             ELSE
-                ! Revert to concentrations prior to 1st call to "Integrate"
-                C = C_before_integrate
-             ENDIF
+                IF ( Input_Opt%KppStop ) THEN
+                    CALL ERROR_STOP(ERRMSG, 'INTEGRATE_KPP')
+                ELSE
+                    ! Revert to concentrations prior to 1st call to "Integrate"
+                    C = C_before_integrate
+                ENDIF
 
-             !! Keep track of error boxes
-             !IF ( State_Diag%Archive_KppError ) THEN
-             !   State_Diag%KppError(I,J,L) = State_Diag%KppError(I,J,L) + 1.0
-             !ENDIF
+                !! Keep track of error boxes
+                !IF ( State_Diag%Archive_KppError ) THEN
+                !   State_Diag%KppError(I,J,L) = State_Diag%KppError(I,J,L) + 1.0
+                !ENDIF
 #else
-             !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-             ! Make sure only one thread at a time executes this block
-             !$OMP CRITICAL
-             !
-             ! Set a flag to break out of loop gracefully
-             ! NOTE: You can set a GDB breakpoint here to examine the error
-             Failed2x = .TRUE.
+                !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                ! Make sure only one thread at a time executes this block
+                !$OMP CRITICAL
+                !
+                ! Set a flag to break out of loop gracefully
+                ! NOTE: You can set a GDB breakpoint here to examine the error
+                Failed2x = .TRUE.
 
-             ! Print concentrations at failure grid box
-             PRINT*, REPEAT( '#', 79 )
-             PRINT*, '### KPP DEBUG OUTPUT!'
-             PRINT*, '### Species concentrations'! at problem box ', I, J, L
-             PRINT*, REPEAT( '#', 79 )
-             DO N = 1, NSPEC
-                PRINT*, C(N), TRIM( ADJUSTL( SPC_NAMES(N) ) )
-             ENDDO
+                ! Print concentrations at failure grid box
+                PRINT*, REPEAT( '#', 79 )
+                PRINT*, '### KPP DEBUG OUTPUT!'
+                PRINT*, '### Species concentrations'! at problem box ', I, J, L
+                PRINT*, REPEAT( '#', 79 )
+                DO N = 1, NSPEC
+                    PRINT*, C(N), TRIM( ADJUSTL( SPC_NAMES(N) ) )
+                ENDDO
 
-             ! Print rate constants at failure grid box
-             PRINT*, REPEAT( '#', 79 )
-             PRINT*, '### KPP DEBUG OUTPUT!'
-             PRINT*, '### Reaction rates'! at problem box ', I, J, L
-             PRINT*, REPEAT( '#', 79 )
-             DO N = 1, NREACT
-                PRINT*, RCONST(N), TRIM( ADJUSTL( EQN_NAMES(N) ) )
-             ENDDO
-             !
-             !$OMP END CRITICAL
-             !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                ! Print rate constants at failure grid box
+                PRINT*, REPEAT( '#', 79 )
+                PRINT*, '### KPP DEBUG OUTPUT!'
+                PRINT*, '### Reaction rates'! at problem box ', I, J, L
+                PRINT*, REPEAT( '#', 79 )
+                DO N = 1, NREACT
+                    PRINT*, RCONST(N), TRIM( ADJUSTL( EQN_NAMES(N) ) )
+                ENDDO
+                !
+                !$OMP END CRITICAL
+                !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-             ! Start skipping to end of loop upon 2 failures in a row
-             CYCLE
+                ! Start skipping to end of loop upon 2 failures in a row
+                CYCLE
 #endif
-          ENDIF
+            ENDIF
 
-       ENDIF
+        ENDIF
 
        !=====================================================================
        ! Continue upon successful return...
        !=====================================================================
 
-       ! Revert Alkalinity (only when using sulfur chemistry in KPP)
-       IF ( .not. State_Chm%Do_SulfateMod_SeaSalt ) THEN
-          CALL fullchem_ConvertEquivToAlk()
-       ENDIF
+        ! Revert Alkalinity (only when using sulfur chemistry in KPP)
+        IF ( .not. State_Chm%Do_SulfateMod_SeaSalt ) THEN
+            CALL fullchem_ConvertEquivToAlk()
+        ENDIF
 
-       ! Copy C back into C_1D
-       C_1D(:,I_CELL) = C(:)
-       RCONST_1D(:,I_CELL) = RCONST(:)
+        ! Copy C back into C_1D
+        C_1D(:,I_CELL) = C(:)
+        RCONST_1D(:,I_CELL) = RCONST(:)
     ENDDO
 
 #ifdef MODEL_GCHPCTM
+    ! Skip load balancing if we are not moving any cells, i.e. next_PET = -1
+    IF (reassignment_data(interval)%next_PET /= -1) THEN
 #ifdef HIRES_TIMER
-    ! Always time the inbetween section
-    TimerEnd = rdtsc()
-    ! Write both times to timer log file
-    WRITE(unit_number, *) Interval, 'Inbetween', TimerStart, TimerEnd
+        TimerStart = rdtsc()
 #endif
+        CALL MPI_Recv( &
+            C_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
+            reassignment_data(interval)%prev_PET, 0, &
+            Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
+        CALL MPI_Recv( &
+            RCONST_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
+            reassignment_data(interval)%prev_PET, 1, &
+            Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
+        CALL MPI_Recv( &
+            I_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
+            reassignment_data(interval)%prev_PET, 2, &
+            Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
+        CALL MPI_Recv( &
+            R_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
+            reassignment_data(interval)%prev_PET, 3, &
+            Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
+#ifdef HIRES_TIMER
+        TimerEnd = rdtsc()
+        ! Write both times to timer log file
+        WRITE(unit_number, *) Interval, 'ForwardRecv', TimerStart, TimerEnd
+    
+        TimerStart = rdtsc()
+#endif
+        ! Unpack the columns from the *_recv arrays to the *_1D arrays
+        DO L = 1, State_Grid%NZ
+            DO i = 1, reassignment_data(interval)%NCELL_moving
+                C_1D(:,(L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = C_recv(:,(L-1)*reassignment_data(interval)%NCELL_moving+i)
+                RCONST_1D(:,(L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = RCONST_recv(:,(L-1)*reassignment_data(interval)%NCELL_moving+i)
+                ICNTRL_1D(:,(L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = I_recv(:,(L-1)*reassignment_data(interval)%NCELL_moving+i)
+                RCNTRL_1D(:,(L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = R_recv(:,(L-1)*reassignment_data(interval)%NCELL_moving+i)
+            END DO
+        END DO
+#ifdef HIRES_TIMER
+        TimerEnd = rdtsc()
+        ! Write both times to timer log file
+        WRITE(unit_number, *) Interval, 'ForwardUnpacking', TimerStart, TimerEnd
+#endif
+    ENDIF
+
+    ! Process the cells which have been swapped and received data from another PET
+    !$OMP PARALLEL DO                                                        &
+    !$OMP DEFAULT( SHARED                                                   )&
+    !$OMP PRIVATE( I,        J,        L,       N                           )&
+    !$OMP PRIVATE( ICNTRL,   C_before_integrate                             )&
+    !$OMP PRIVATE( SO4_FRAC, IERR,     RCNTRL,  ISTATUS,   RSTATE           )&
+    !$OMP PRIVATE( SpcID,    KppID,    F,       P,         Vloc             )&
+    !$OMP PRIVATE( Aout,     Thread,   RC,      S,         LCH4             )&
+    !$OMP PRIVATE( OHreact,  PCO_TOT,  PCO_CH4, PCO_NMVOC, SR               )&
+    !$OMP PRIVATE( SIZE_RES, LWC                                            )&
+#ifdef MODEL_GEOS
+    !$OMP PRIVATE( NOxTau,     NOxConc, NOx_weight, NOx_tau_weighted        )&
+#endif
+    !$OMP COLLAPSE( 3                                                       )&
+    !$OMP SCHEDULE( DYNAMIC, 24                                             )&
+    !$OMP REDUCTION( +:errorCount                                           )
+    DO L = 1, State_Grid%NZ
+        DO i = 1, reassignment_data(interval)%NCELL_moving
+
+            I_CELL = (L-1)*State_Grid%NX*State_Grid%NY + reassignment_data(interval)%swap_indices(i)
+
+            ! Skip to the end of the loop if we have failed integration twice
+            IF ( Failed2x ) CYCLE
+
+            ISTATUS   = 0.0_dp                   ! Rosenbrock output
+            RSTATE    = 0.0_dp                   ! Rosenbrock output
+            IERR = 0
+
+            ! Load in data from saved arrays
+            RCONST(:)   = RCONST_1D(:,I_CELL)
+            C(:)        = C_1D(:,I_CELL)
+            ICNTRL(:)   = ICNTRL_1D(:,I_CELL)
+            RCNTRL(:)   = RCNTRL_1D(:,I_CELL)
+
+            ! In case we need to reset
+            C_before_integrate(:) = C(:)
+            CALL Timer_Start( TimerName = "     Integrate 1",                  &
+            InLoop    =  .TRUE.,                             &
+            ThreadNum = Thread,                              &
+            RC        = RC                                  )
+            ! Start timer
+            IF ( Input_Opt%useTimers ) THEN
+                CALL Timer_Start( TimerName = "     Integrate 1",                  &
+                                    InLoop    =  .TRUE.,                             &
+                                    ThreadNum = Thread,                              &
+                                    RC        = RC                                  )
+            ENDIF
+
+            ! Call the Rosenbrock integrator
+            ! (with optional auto-reduce functionality)
+            CALL Integrate( TIN,    TOUT,    ICNTRL,                              &
+                            RCNTRL, ISTATUS, RSTATE, IERR                        )
+
+            ! Stop timer
+            IF ( Input_Opt%useTimers ) THEN
+                CALL Timer_End( TimerName = "     Integrate 1",                    &
+                                InLoop    = .TRUE.,                                &
+                                ThreadNum = Thread,                                &
+                                RC        = RC                                    )
+            ENDIF
+            CALL Timer_End( TimerName = "     Integrate 1",                    &
+            InLoop    = .TRUE.,                                &
+            ThreadNum = Thread,                                &
+            RC        = RC                                    )
+            ! Add to diagnostic arrays
+            RSTATE_1D(:,I_CELL)  = RSTATE(:)
+            ISTATUS_1D(:,I_CELL) = ISTATUS(:)
+
+            ! Print grid box indices to screen if integrate failed
+            IF ( IERR < 0 ) THEN
+
+                ! Turn off error output after a certain limit is reached
+                IF ( .not. doSuppress ) THEN
+                    WRITE( 6, * ) '### INTEGRATE RETURNED ERROR AT: ', I, J, L
+                    errorCount = errorCount + 1
+                    IF ( errorCount > INTEGRATE_FAIL_TOGGLE ) THEN
+                        WRITE( 6, '(a)' ) &
+                        '### Further error output has been switched off'
+                        doSuppress = .TRUE.
+                    ENDIF
+                ENDIF
+
+        !#if defined( MODEL_GEOS ) || defined( MODEL_WRF )
+        !          ! Keep track of error boxes
+        !          IF ( State_Diag%Archive_KppError ) THEN
+        !             State_Diag%KppError(I,J,L) = State_Diag%KppError(I,J,L) + 1.0
+        !          ENDIF
+        !#endif
+
+                !=====================================================================
+                ! Try another time if it failed
+                !=====================================================================
+
+                ! Zero the first time step (Hstart, used by Rosenbrock).  Also reset
+                ! C with concentrations prior to the 1st call to "Integrate".
+                RCNTRL(3) = 0.0_dp
+                C         = C_before_integrate
+
+                ! Disable auto-reduce solver for the second iteration for safety
+                IF ( Input_Opt%Use_AutoReduce ) THEN
+                    RCNTRL(12) = -1.0_dp ! without using ICNTRL
+                ENDIF
+
+                ! Update rates again
+                ! NOT POSSIBLE - relevant arrays no longer exist
+                !CALL Update_RCONST( )
+                RCONST(:) = RCONST_1D(:,I_CELL)
+
+                ! Start timer
+                IF ( Input_Opt%useTimers ) THEN
+                    CALL Timer_Start( TimerName = "     Integrate 2",               &
+                                    InLoop    =  .TRUE.,                          &
+                                    ThreadNum = Thread,                           &
+                                    RC        = RC                               )
+                ENDIF
+
+                ! Call the Rosenbrock integrator (w/ auto-reduction disabled)
+                CALL Integrate( TIN,    TOUT,    ICNTRL,                           &
+                                RCNTRL, ISTATUS, RSTATE, IERR                     )
+
+                ! Stop timer
+                IF ( Input_Opt%useTimers ) THEN
+                    CALL Timer_End( TimerName = "     Integrate 2",                 &
+                                    InLoop    =  .TRUE.,                            &
+                                    ThreadNum = Thread,                             &
+                                    RC        = RC                                 )
+                ENDIF
+
+                ! Again, store ISTATUS and RSTATE
+                ! ISTATUS is all counts
+                ISTATUS_1D(:,I_CELL) = ISTATUS_1D(:,I_CELL) + ISTATUS(:)
+                RSTATE_1D(:,I_CELL) = RSTATE(:)
+
+                !==================================================================
+                ! Exit upon the second failure
+                !==================================================================
+                IF ( IERR < 0 ) THEN
+
+                    ! Print error message
+                    WRITE(6,     '(a   )' ) '## INTEGRATE FAILED TWICE !!! '
+                    WRITE(ERRMSG,'(a,i3)' ) 'Integrator error code :', IERR
+
+        #if defined( MODEL_GEOS ) || defined( MODEL_WRF )
+                    IF ( Input_Opt%KppStop ) THEN
+                        CALL ERROR_STOP(ERRMSG, 'INTEGRATE_KPP')
+                    ELSE
+                        ! Revert to concentrations prior to 1st call to "Integrate"
+                        C = C_before_integrate
+                    ENDIF
+
+                    !! Keep track of error boxes
+                    !IF ( State_Diag%Archive_KppError ) THEN
+                    !   State_Diag%KppError(I,J,L) = State_Diag%KppError(I,J,L) + 1.0
+                    !ENDIF
+        #else
+                    !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                    ! Make sure only one thread at a time executes this block
+                    !$OMP CRITICAL
+                    !
+                    ! Set a flag to break out of loop gracefully
+                    ! NOTE: You can set a GDB breakpoint here to examine the error
+                    Failed2x = .TRUE.
+
+                    ! Print concentrations at failure grid box
+                    PRINT*, REPEAT( '#', 79 )
+                    PRINT*, '### KPP DEBUG OUTPUT!'
+                    PRINT*, '### Species concentrations'! at problem box ', I, J, L
+                    PRINT*, REPEAT( '#', 79 )
+                    DO N = 1, NSPEC
+                        PRINT*, C(N), TRIM( ADJUSTL( SPC_NAMES(N) ) )
+                    ENDDO
+
+                    ! Print rate constants at failure grid box
+                    PRINT*, REPEAT( '#', 79 )
+                    PRINT*, '### KPP DEBUG OUTPUT!'
+                    PRINT*, '### Reaction rates'! at problem box ', I, J, L
+                    PRINT*, REPEAT( '#', 79 )
+                    DO N = 1, NREACT
+                        PRINT*, RCONST(N), TRIM( ADJUSTL( EQN_NAMES(N) ) )
+                    ENDDO
+                    !
+                    !$OMP END CRITICAL
+                    !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+                    ! Start skipping to end of loop upon 2 failures in a row
+                    CYCLE
+        #endif
+                ENDIF
+
+            ENDIF
+
+            !=====================================================================
+            ! Continue upon successful return...
+            !=====================================================================
+
+            ! Revert Alkalinity (only when using sulfur chemistry in KPP)
+            IF ( .not. State_Chm%Do_SulfateMod_SeaSalt ) THEN
+                CALL fullchem_ConvertEquivToAlk()
+            ENDIF
+
+            ! Copy C back into C_1D
+            C_1D(:,I_CELL) = C(:)
+            RCONST_1D(:,I_CELL) = RCONST(:)
+        ENDDO
+    ENDDO
+
     ! Skip reverse load balancing if we are not moving any cells, i.e. target_PET = -1
     IF (reassignment_data(interval)%next_PET /= -1) THEN
 #ifdef HIRES_TIMER
         TimerStart = rdtsc()
 #endif
-        ! Gather the columns to be swapped to the *_recv arrays
-        DO I_CELL = 1, State_Grid%NZ
-            DO i = 1, reassignment_data(interval)%NCELL_moving
-                C_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
-                RCONST_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
-                I_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = ISTATUS_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
-                R_recv(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i) = RSTATE_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
-            END DO
+    ! Gather the columns to be swapped to the *_recv arrays
+    DO L = 1, State_Grid%NZ
+        DO i = 1, reassignment_data(interval)%NCELL_moving
+            C_recv(:, (L-1)*reassignment_data(interval)%NCELL_moving+i) = C_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
+            RCONST_recv(:, (L-1)*reassignment_data(interval)%NCELL_moving+i) = RCONST_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
+            I_recv(:, (L-1)*reassignment_data(interval)%NCELL_moving+i) = ISTATUS_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
+            R_recv(:, (L-1)*reassignment_data(interval)%NCELL_moving+i) = RSTATE_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
         END DO
+    END DO
 #ifdef HIRES_TIMER
-        TimerEnd = rdtsc()
-        ! Write both times to timer log file
-        WRITE(unit_number, *) Interval, 'ReversePacking', TimerStart, TimerEnd
+    TimerEnd = rdtsc()
+    ! Write both times to timer log file
+    WRITE(unit_number, *) Interval, 'ReversePacking', TimerStart, TimerEnd
 
-        TimerStart = rdtsc()
+    TimerStart = rdtsc()
 #endif
-      ! Pass the actual data
-      CALL MPI_Isend( &
-          C_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%prev_PET, 4, &
-          Input_Opt%mpiComm, request, RC)
-      CALL MPI_Isend( &
-          RCONST_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%prev_PET, 5, &
-          Input_Opt%mpiComm, request, RC)
-      CALL MPI_Isend( &
-          I_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
-          reassignment_data(interval)%prev_PET, 6, &
-          Input_Opt%mpiComm, request, RC)
+    ! Pass the actual data
+    CALL MPI_Isend( &
+        C_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
+        reassignment_data(interval)%prev_PET, 4, &
+        Input_Opt%mpiComm, request, RC)
+    CALL MPI_Isend( &
+        RCONST_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
+        reassignment_data(interval)%prev_PET, 5, &
+        Input_Opt%mpiComm, request, RC)
+    CALL MPI_Isend( &
+        I_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
+        reassignment_data(interval)%prev_PET, 6, &
+        Input_Opt%mpiComm, request, RC)
 
-      CALL MPI_Isend( &
-          R_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%prev_PET, 7, &
-          Input_Opt%mpiComm, request, RC)
+    CALL MPI_Isend( &
+        R_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
+        reassignment_data(interval)%prev_PET, 7, &
+        Input_Opt%mpiComm, request, RC)
 #ifdef HIRES_TIMER
-        TimerEnd = rdtsc()
-        ! Write both times to timer log file
-        WRITE(unit_number, *) Interval, 'ReverseIsend', TimerStart, TimerEnd
-        
-        TimerStart = rdtsc()
+    TimerEnd = rdtsc()
+    ! Write both times to timer log file
+    WRITE(unit_number, *) Interval, 'ReverseIsend', TimerStart, TimerEnd
+    
+    TimerStart = rdtsc()
 #endif
-      CALL MPI_Recv( &
-          C_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%next_PET, 4, &
-          Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
-      CALL MPI_Recv( &
-          RCONST_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%next_PET, 5, &
-          Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
+    CALL MPI_Recv( &
+        C_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
+        reassignment_data(interval)%next_PET, 4, &
+        Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
+    CALL MPI_Recv( &
+        RCONST_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
+        reassignment_data(interval)%next_PET, 5, &
+        Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
 
-      CALL MPI_Recv( &
-          I_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
-          reassignment_data(interval)%next_PET, 6, &
-          Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
-      CALL MPI_Recv( &
-          R_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
-          reassignment_data(interval)%next_PET, 7, &
-          Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
+    CALL MPI_Recv( &
+        I_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
+        reassignment_data(interval)%next_PET, 6, &
+        Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
+    CALL MPI_Recv( &
+        R_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
+        reassignment_data(interval)%next_PET, 7, &
+        Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
 #ifdef HIRES_TIMER
-        TimerEnd = rdtsc()
-        ! Write both times to timer log file
-        WRITE(unit_number, *) Interval, 'ReverseRecv', TimerStart, TimerEnd
-        
-        TimerStart = rdtsc()
+    TimerEnd = rdtsc()
+    ! Write both times to timer log file
+    WRITE(unit_number, *) Interval, 'ReverseRecv', TimerStart, TimerEnd
+    
+    TimerStart = rdtsc()
 #endif
-        ! Unpack the columns from the *_send arrays
-        DO I_CELL = 1, State_Grid%NZ
-            DO i = 1, reassignment_data(interval)%NCELL_moving
-                C_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = C_send(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i)
-                RCONST_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = RCONST_send(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i)
-                ISTATUS_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = I_send(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i)
-                RSTATE_1D(:,(I_CELL-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = R_send(:,(I_CELL-1)*reassignment_data(interval)%NCELL_moving+i)
-            END DO
+    ! Unpack the columns from the *_send arrays
+    DO L = 1, State_Grid%NZ
+        DO i = 1, reassignment_data(interval)%NCELL_moving
+            C_1D(:,(L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = C_send(:,(L-1)*reassignment_data(interval)%NCELL_moving+i)
+            RCONST_1D(:,(L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = RCONST_send(:,(L-1)*reassignment_data(interval)%NCELL_moving+i)
+            ISTATUS_1D(:,(L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = I_send(:,(L-1)*reassignment_data(interval)%NCELL_moving+i)
+            RSTATE_1D(:,(L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = R_send(:,(L-1)*reassignment_data(interval)%NCELL_moving+i)
         END DO
+    END DO
 #ifdef HIRES_TIMER
         TimerEnd = rdtsc()
         ! Write both times to timer log file
