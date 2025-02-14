@@ -1136,10 +1136,10 @@ CONTAINS
         DO L = 1, State_Grid%NZ
             I = 1
             J = 1
-            DO N = 1, NCELL_local
+            DO N = 1, State_Grid%NX*State_Grid%NY
                 ! Prevent out of bounds error since Fortran does not gaurantee left to right evaluation of logical operators
                 IF (I > reassignment_data(interval)%NCELL_moving) THEN
-                    local_indices(j) = N
+                    local_indices((L-1)*State_Grid%NX*State_Grid%NY + J) = N
                     J = J + 1
                 ELSE
                     IF (N == reassignment_data(interval)%swap_indices(I)) THEN
@@ -1149,7 +1149,7 @@ CONTAINS
                         R_send(:, (L-1)*reassignment_data(interval)%NCELL_moving + I) = RCNTRL_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(I))
                         i = i + 1
                     ELSE
-                        local_indices(j) = N
+                        local_indices((L-1)*State_Grid%NX*State_Grid%NY + J) = N
                         J = J + 1
                     END IF
                 END IF
