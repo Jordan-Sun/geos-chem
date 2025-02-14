@@ -1142,7 +1142,7 @@ CONTAINS
                     local_indices(j) = N
                     J = J + 1
                 ELSE
-                    IF (N = reassignment_data(interval)%swap_indices(I)) THEN
+                    IF (N == reassignment_data(interval)%swap_indices(I)) THEN
                         C_send(:, (L-1)*reassignment_data(interval)%NCELL_moving + I) = C_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(I))
                         RCONST_send(:, (L-1)*reassignment_data(interval)%NCELL_moving + I) = RCONST_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(I))
                         I_send(:, (L-1)*reassignment_data(interval)%NCELL_moving + I) = ICNTRL_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(I))
