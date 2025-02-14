@@ -97,7 +97,7 @@ MODULE FullChem_Mod
   REAL(f4), ALLOCATABLE :: JvSumMon  (:,:,:,:)
 
   ! For load balancing
-  REAL(fP), ALLOCATABLE  :: cost_1D(:)
+  INTEGER,  ALLOCATABLE  :: local_indices(:)
   REAL(fP), ALLOCATABLE  :: C_1D(:,:)
   REAL(fP), ALLOCATABLE  :: RCONST_1D(:,:)
   INTEGER,  ALLOCATABLE  :: ICNTRL_1D(:,:)
@@ -511,9 +511,9 @@ CONTAINS
    
     ! For load balancing
     NCELL_local = 0
+    local_indices = 0
 
     ! Input
-    cost_1D      = 0.0e+0_fp
     C_1D         = 0.0e+0_fp
     RCONST_1D    = 0.0e+0_fp
     ICNTRL_1D    = 0.0e+0_fp
@@ -1105,13 +1105,6 @@ CONTAINS
 
        IJL_to_Idx(I,J,L) = NCELL_local
        Idx_to_IJL(:,NCELL_local) = (/ I, J, L /)
-       ! Heuristic: if cos(SZA) is around 0, we are at the terminator
-       ! Only works if cos(SZA) is still calculated in darkness
-       If (Abs(State_Met%SUNCOSmid(I,J)) .lt. 0.3e+0_fp) Then
-           cost_1D(NCELL_local) = 2.0e+0_fp
-       Else
-           cost_1D(NCELL_local) = 1.0e+0_fp
-       END IF
       
     ENDDO ! I
     ENDDO ! J
@@ -1119,7 +1112,7 @@ CONTAINS
     
     ! Balancing
     ! NCELL_local: Number of cells in local domain which need a calculation
-    ! NCELL:       Number of cells we are running a calculation for after balancing
+    ! NCELL:       Number of cells in local domain we are running a calculation
     NCELL = NCELL_local
     
     ! Output
@@ -1137,13 +1130,29 @@ CONTAINS
 #ifdef HIRES_TIMER
      TimerStart = rdtsc()
 #endif
+        ! Reassign the number of cells to be calculated by this PET to the number of cells that need to be moved to the next PET
+        NCELL = NCELL - reassignment_data(interval)%NCELL_moving
         ! Copy the columns from the *_1D arrays to the *_send arrays
         DO L = 1, State_Grid%NZ
-            DO i = 1, reassignment_data(interval)%NCELL_moving
-                C_send(:, (L-1)*reassignment_data(interval)%NCELL_moving+i) = C_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
-                RCONST_send(:, (L-1)*reassignment_data(interval)%NCELL_moving+i) = RCONST_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
-                I_send(:, (L-1)*reassignment_data(interval)%NCELL_moving+i) = ICNTRL_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
-                R_send(:, (L-1)*reassignment_data(interval)%NCELL_moving+i) = RCNTRL_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
+            I = 1
+            J = 1
+            DO N = 1, NCELL_local
+                ! Prevent out of bounds error since Fortran does not gaurantee left to right evaluation of logical operators
+                IF (I > reassignment_data(interval)%NCELL_moving) THEN
+                    local_indices(j) = N
+                    J = J + 1
+                ELSE
+                    IF (N = reassignment_data(interval)%swap_indices(I)) THEN
+                        C_send(:, (L-1)*reassignment_data(interval)%NCELL_moving + I) = C_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(I))
+                        RCONST_send(:, (L-1)*reassignment_data(interval)%NCELL_moving + I) = RCONST_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(I))
+                        I_send(:, (L-1)*reassignment_data(interval)%NCELL_moving + I) = ICNTRL_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(I))
+                        R_send(:, (L-1)*reassignment_data(interval)%NCELL_moving + I) = RCNTRL_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(I))
+                        i = i + 1
+                    ELSE
+                        local_indices(j) = N
+                        J = J + 1
+                    END IF
+                END IF
             END DO
         END DO
 #ifdef HIRES_TIMER
@@ -1193,17 +1202,15 @@ CONTAINS
     !$OMP COLLAPSE( 3                                                       )&
     !$OMP SCHEDULE( DYNAMIC, 24                                             )&
     !$OMP REDUCTION( +:errorCount                                           )
-    DO I_CELL = 1, NCELL_local
+    DO I = 1, NCELL
 
         ! Skip to the end of the loop if we have failed integration twice
         IF ( Failed2x ) CYCLE
 
 #ifdef MODEL_GCHPCTM
-        ! Continue to the next cell if the current cell is marked as swapped and needs to wait for data from another PET
-        N = MOD(I_CELL, State_Grid%NX*State_Grid%NY)
-        DO i = 1, reassignment_data(interval)%NCELL_moving
-            IF ( N == reassignment_data(interval)%swap_indices(i) ) CYCLE
-        END DO
+        I_CELL = local_indices(I)
+#else
+        I_CELL = I
 #endif
 
         ISTATUS   = 0.0_dp                   ! Rosenbrock output
@@ -1418,11 +1425,11 @@ CONTAINS
 #endif
         ! Unpack the columns from the *_recv arrays to the *_1D arrays
         DO L = 1, State_Grid%NZ
-            DO i = 1, reassignment_data(interval)%NCELL_moving
-                C_1D(:,(L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = C_recv(:,(L-1)*reassignment_data(interval)%NCELL_moving+i)
-                RCONST_1D(:,(L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = RCONST_recv(:,(L-1)*reassignment_data(interval)%NCELL_moving+i)
-                ICNTRL_1D(:,(L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = I_recv(:,(L-1)*reassignment_data(interval)%NCELL_moving+i)
-                RCNTRL_1D(:,(L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = R_recv(:,(L-1)*reassignment_data(interval)%NCELL_moving+i)
+            DO I = 1, reassignment_data(interval)%NCELL_moving
+                C_1D(:,(L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(I)) = C_recv(:,(L-1)*reassignment_data(interval)%NCELL_moving + I)
+                RCONST_1D(:,(L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(I)) = RCONST_recv(:,(L-1)*reassignment_data(interval)%NCELL_moving + I)
+                ICNTRL_1D(:,(L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(I)) = I_recv(:,(L-1)*reassignment_data(interval)%NCELL_moving + I)
+                RCNTRL_1D(:,(L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(I)) = R_recv(:,(L-1)*reassignment_data(interval)%NCELL_moving + I)
             END DO
         END DO
 #ifdef HIRES_TIMER
@@ -1448,12 +1455,14 @@ CONTAINS
         !$OMP SCHEDULE( DYNAMIC, 24                                             )&
         !$OMP REDUCTION( +:errorCount                                           )
         DO L = 1, State_Grid%NZ
-            DO i = 1, reassignment_data(interval)%NCELL_moving
-
-                I_CELL = (L-1)*State_Grid%NX*State_Grid%NY + reassignment_data(interval)%swap_indices(i)
+            DO I = 1, reassignment_data(interval)%NCELL_moving
 
                 ! Skip to the end of the loop if we have failed integration twice
                 IF ( Failed2x ) CYCLE
+
+                ! To do: directly load the data from the received arrays
+                ! Compute the index of the received cell in the 1D array of cells to be calculated by this PET
+                I_CELL = (L-1)*State_Grid%NX*State_Grid%NY + reassignment_data(interval)%swap_indices(I)
 
                 ISTATUS   = 0.0_dp                   ! Rosenbrock output
                 RSTATE    = 0.0_dp                   ! Rosenbrock output
@@ -1643,11 +1652,11 @@ CONTAINS
 #endif
         ! Gather the columns to be swapped to the *_recv arrays
         DO L = 1, State_Grid%NZ
-            DO i = 1, reassignment_data(interval)%NCELL_moving
-                C_recv(:, (L-1)*reassignment_data(interval)%NCELL_moving+i) = C_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
-                RCONST_recv(:, (L-1)*reassignment_data(interval)%NCELL_moving+i) = RCONST_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
-                I_recv(:, (L-1)*reassignment_data(interval)%NCELL_moving+i) = ISTATUS_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
-                R_recv(:, (L-1)*reassignment_data(interval)%NCELL_moving+i) = RSTATE_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i))
+            DO I = 1, reassignment_data(interval)%NCELL_moving
+                C_recv(:, (L-1)*reassignment_data(interval)%NCELL_moving + I) = C_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(I))
+                RCONST_recv(:, (L-1)*reassignment_data(interval)%NCELL_moving + I) = RCONST_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(I))
+                I_recv(:, (L-1)*reassignment_data(interval)%NCELL_moving + I) = ISTATUS_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(I))
+                R_recv(:, (L-1)*reassignment_data(interval)%NCELL_moving + I) = RSTATE_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(I))
             END DO
         END DO
 #ifdef HIRES_TIMER
@@ -1708,11 +1717,11 @@ CONTAINS
 #endif
         ! Unpack the columns from the *_send arrays
         DO L = 1, State_Grid%NZ
-            DO i = 1, reassignment_data(interval)%NCELL_moving
-                C_1D(:,(L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = C_send(:,(L-1)*reassignment_data(interval)%NCELL_moving+i)
-                RCONST_1D(:,(L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = RCONST_send(:,(L-1)*reassignment_data(interval)%NCELL_moving+i)
-                ISTATUS_1D(:,(L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = I_send(:,(L-1)*reassignment_data(interval)%NCELL_moving+i)
-                RSTATE_1D(:,(L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(i)) = R_send(:,(L-1)*reassignment_data(interval)%NCELL_moving+i)
+            DO I = 1, reassignment_data(interval)%NCELL_moving
+                C_1D(:,(L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(I)) = C_send(:,(L-1)*reassignment_data(interval)%NCELL_moving + I)
+                RCONST_1D(:,(L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(I)) = RCONST_send(:,(L-1)*reassignment_data(interval)%NCELL_moving + I)
+                ISTATUS_1D(:,(L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(I)) = I_send(:,(L-1)*reassignment_data(interval)%NCELL_moving + I)
+                RSTATE_1D(:,(L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(I)) = R_send(:,(L-1)*reassignment_data(interval)%NCELL_moving + I)
             END DO
     END DO
 #ifdef HIRES_TIMER
@@ -3403,10 +3412,10 @@ CONTAINS
     ! NCELL_max:   Max number of cells to be computed on any domain
     CALL Timer_Add("     Integrate 1",         RC )
 
-    Allocate(cost_1D   (NCELL_max)       , STAT=RC)
-    CALL GC_CheckVar( 'fullchem_mod.F90:cost_1D', 0, RC )
+    Allocate(local_indices   (NCELL_max)       , STAT=RC)
+    CALL GC_CheckVar( 'fullchem_mod.F90:local_indices', 0, RC )
     IF ( RC /= GC_SUCCESS ) Then
-        CALL GC_Error( 'Failed to allocate cost_1D', RC, ThisLoc )
+        CALL GC_Error( 'Failed to allocate local_indices', RC, ThisLoc )
         RETURN
     END IF
     Allocate(C_1D      (NSPEC,NCELL_max) , STAT=RC)
@@ -3568,9 +3577,9 @@ CONTAINS
     ENDIF
 
     ! Arrays for load balancing
-    If ( ALLOCATED( cost_1D ) ) Then
-       Deallocate(cost_1D, STAT=RC)
-       CALL GC_CheckVar( 'fullchem_mod.F90:cost_1D', 2, RC )
+    If ( ALLOCATED( local_indices ) ) Then
+       Deallocate(local_indices, STAT=RC)
+       CALL GC_CheckVar( 'fullchem_mod.F90:local_indices', 2, RC )
        IF ( RC /= GC_SUCCESS ) RETURN
     ENDIF
 
