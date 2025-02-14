@@ -1199,7 +1199,7 @@ CONTAINS
 #ifdef MODEL_GEOS
     !$OMP PRIVATE( NOxTau,     NOxConc, NOx_weight, NOx_tau_weighted        )&
 #endif
-    !$OMP COLLAPSE( 2                                                       )&
+    !$OMP COLLAPSE( 3                                                       )&
     !$OMP SCHEDULE( DYNAMIC, 24                                             )&
     !$OMP REDUCTION( +:errorCount                                           )
     DO L = 1, State_Grid%NZ
@@ -1272,12 +1272,12 @@ CONTAINS
                     ENDIF
                 ENDIF
 
-    ! #if defined( MODEL_GEOS ) || defined( MODEL_WRF )
-    !             ! Keep track of error boxes
-    !             IF ( State_Diag%Archive_KppError ) THEN
-    !                 State_Diag%KppError(I,J,L) = State_Diag%KppError(I,J,L) + 1.0
-    !             ENDIF
-    ! #endif
+! #if defined( MODEL_GEOS ) || defined( MODEL_WRF )
+!             ! Keep track of error boxes
+!             IF ( State_Diag%Archive_KppError ) THEN
+!                 State_Diag%KppError(I,J,L) = State_Diag%KppError(I,J,L) + 1.0
+!             ENDIF
+! #endif
 
                 !=====================================================================
                 ! Try another time if it failed
@@ -1332,7 +1332,7 @@ CONTAINS
                     WRITE(6,     '(a   )' ) '## INTEGRATE FAILED TWICE !!! '
                     WRITE(ERRMSG,'(a,i3)' ) 'Integrator error code :', IERR
 
-    #if defined( MODEL_GEOS ) || defined( MODEL_WRF )
+#if defined( MODEL_GEOS ) || defined( MODEL_WRF )
                     IF ( Input_Opt%KppStop ) THEN
                         CALL ERROR_STOP(ERRMSG, 'INTEGRATE_KPP')
                     ELSE
@@ -1344,7 +1344,7 @@ CONTAINS
                     !IF ( State_Diag%Archive_KppError ) THEN
                     !   State_Diag%KppError(I,J,L) = State_Diag%KppError(I,J,L) + 1.0
                     !ENDIF
-    #else
+#else
                     !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                     ! Make sure only one thread at a time executes this block
                     !$OMP CRITICAL
@@ -1376,7 +1376,7 @@ CONTAINS
 
                     ! Start skipping to end of loop upon 2 failures in a row
                     CYCLE
-    #endif
+#endif
                 ENDIF
 
             ENDIF
@@ -1453,7 +1453,7 @@ CONTAINS
 #ifdef MODEL_GEOS
         !$OMP PRIVATE( NOxTau,     NOxConc, NOx_weight, NOx_tau_weighted        )&
 #endif
-        !$OMP COLLAPSE( 2                                                       )&
+        !$OMP COLLAPSE( 3                                                       )&
         !$OMP SCHEDULE( DYNAMIC, 24                                             )&
         !$OMP REDUCTION( +:errorCount                                           )
         DO L = 1, State_Grid%NZ
