@@ -252,6 +252,7 @@ CONTAINS
     ! All the KPP inputs remapped to a 1-D array
     INTEGER                :: NCELL, NCELL_local, I_CELL
     INTEGER                :: this_PET, request
+    TYPE(MPI_Request)      :: requests(4)
 
     ! For tagged CO saving
     REAL(fp)               :: LCH4, PCO_TOT, PCO_CH4, PCO_NMVOC
@@ -1171,6 +1172,23 @@ CONTAINS
         ! Write both times to timer log file
         WRITE(unit_number, *) Interval, 'ForwardIsend', TimerStart, TimerEnd
 #endif
+        ! Start asynchronous receive
+        CALL MPI_Irecv( &
+            C_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
+            reassignment_data(interval)%prev_PET, 0, &
+            Input_Opt%mpiComm, requests(1), RC)
+        CALL MPI_Irecv( &
+            RCONST_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
+            reassignment_data(interval)%prev_PET, 1, &
+            Input_Opt%mpiComm, requests(2), RC)
+        CALL MPI_Irecv( &
+            I_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
+            reassignment_data(interval)%prev_PET, 2, &
+            Input_Opt%mpiComm, requests(3), RC)
+        CALL MPI_Irecv( &
+            R_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
+            reassignment_data(interval)%prev_PET, 3, &
+            Input_Opt%mpiComm, requests(4), RC)
     ENDIF ! load balancing
 #endif
 
@@ -1384,22 +1402,8 @@ CONTAINS
 #ifdef HIRES_TIMER
         TimerStart = rdtsc()
 #endif
-        CALL MPI_Recv( &
-            C_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
-            reassignment_data(interval)%prev_PET, 0, &
-            Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
-        CALL MPI_Recv( &
-            RCONST_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
-            reassignment_data(interval)%prev_PET, 1, &
-            Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
-        CALL MPI_Recv( &
-            I_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
-            reassignment_data(interval)%prev_PET, 2, &
-            Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
-        CALL MPI_Recv( &
-            R_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
-            reassignment_data(interval)%prev_PET, 3, &
-            Input_Opt%mpiComm, MPI_STATUS_IGNORE, RC)
+        ! Wait for the asynchronous receive to complete
+        CALL MPI_Waitall(4, requests, MPI_STATUSES_IGNORE, RC)
 #ifdef HIRES_TIMER
         TimerEnd = rdtsc()
         ! Write both times to timer log file
