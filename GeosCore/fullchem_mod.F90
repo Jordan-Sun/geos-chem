@@ -97,7 +97,7 @@ MODULE FullChem_Mod
   REAL(f4), ALLOCATABLE :: JvSumMon  (:,:,:,:)
 
   ! For load balancing
-  INTEGER,  ALLOCATABLE  :: local_indices(:)
+  LOGICAL,  ALLOCATABLE  :: skip_indicies(:)
   REAL(fP), ALLOCATABLE  :: C_1D(:,:)
   REAL(fP), ALLOCATABLE  :: RCONST_1D(:,:)
   INTEGER,  ALLOCATABLE  :: ICNTRL_1D(:,:)
@@ -511,7 +511,7 @@ CONTAINS
    
     ! For load balancing
     NCELL_local = 0
-    local_indices = 0
+    skip_indicies = .FALSE.
 
     ! Input
     C_1D         = 0.0e+0_fp
@@ -1128,31 +1128,18 @@ CONTAINS
     ! Skip load balancing if we are not moving any cells, i.e. next_PET = -1
     IF (reassignment_data(interval)%next_PET /= -1) THEN
 #ifdef HIRES_TIMER
-     TimerStart = rdtsc()
+        TimerStart = rdtsc()
 #endif
         ! Remove the cells we are moving from the count
         NCELL = NCELL - reassignment_data(interval)%NCELL_moving
         ! Copy the columns from the *_1D arrays to the *_send arrays
         DO L = 1, State_Grid%NZ
-            I = 1
-            J = 1
-            DO N = 1, State_Grid%NX*State_Grid%NY
-                ! Prevent out of bounds error since Fortran does not gaurantee left to right evaluation of logical operators
-                IF (I > reassignment_data(interval)%NCELL_moving) THEN
-                    local_indices((L-1)*NCELL + J) = (L-1)*State_Grid%NX*State_Grid%NY + N
-                    J = J + 1
-                ELSE
-                    IF (N == reassignment_data(interval)%swap_indices(I)) THEN
-                        C_send(:, (L-1)*reassignment_data(interval)%NCELL_moving + I) = C_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(I))
-                        RCONST_send(:, (L-1)*reassignment_data(interval)%NCELL_moving + I) = RCONST_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(I))
-                        I_send(:, (L-1)*reassignment_data(interval)%NCELL_moving + I) = ICNTRL_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(I))
-                        R_send(:, (L-1)*reassignment_data(interval)%NCELL_moving + I) = RCNTRL_1D(:, (L-1)*State_Grid%NX*State_Grid%NY+reassignment_data(interval)%swap_indices(I))
-                        i = i + 1
-                    ELSE
-                        local_indices((L-1)*NCELL + J) = (L-1)*State_Grid%NX*State_Grid%NY + N
-                        J = J + 1
-                    END IF
-                END IF
+            DO I = 1, reassignment_data(interval)%NCELL_moving
+                C_send(:, (L-1)*reassignment_data(interval)%NCELL_moving + I) = C_1D(:, (L-1)*State_Grid%NX*State_Grid%NY + reassignment_data(interval)%swap_indices(I))
+                RCONST_send(:, (L-1)*reassignment_data(interval)%NCELL_moving + I) = RCONST_1D(:, (L-1)*State_Grid%NX*State_Grid%NY + reassignment_data(interval)%swap_indices(I))
+                I_send(:, (L-1)*reassignment_data(interval)%NCELL_moving + I) = ICNTRL_1D(:, (L-1)*State_Grid%NX*State_Grid%NY + reassignment_data(interval)%swap_indices(I))
+                R_send(:, (L-1)*reassignment_data(interval)%NCELL_moving + I) = RCNTRL_1D(:, (L-1)*State_Grid%NX*State_Grid%NY + reassignment_data(interval)%swap_indices(I))
+                skip_indicies((L-1)*State_Grid%NX*State_Grid%NY + reassignment_data(interval)%swap_indices(I)) = .TRUE.
             END DO
         END DO
 #ifdef HIRES_TIMER
@@ -1202,75 +1189,71 @@ CONTAINS
     !$OMP COLLAPSE( 3                                                       )&
     !$OMP SCHEDULE( DYNAMIC, 24                                             )&
     !$OMP REDUCTION( +:errorCount                                           )
-    DO L = 1, State_Grid%NZ
-        DO I = 1, NCELL
-
-            ! Skip to the end of the loop if we have failed integration twice
-            IF ( Failed2x ) CYCLE
+    DO I_CELL = 1, NCELL_local
+        ! Skip to the end of the loop if we have failed integration twice
+        IF ( Failed2x ) CYCLE
 
 #ifdef MODEL_GCHPCTM
-            I_CELL = local_indices((L-1)*NCELL + I)
-#else
-            I_CELL = (L-1)*NCELL + I
+        IF ( skip_indicies(I_CELL) ) CYCLE
 #endif
 
-            ISTATUS   = 0.0_dp                   ! Rosenbrock output
-            RSTATE    = 0.0_dp                   ! Rosenbrock output
-            IERR = 0
+        ISTATUS   = 0.0_dp                   ! Rosenbrock output
+        RSTATE    = 0.0_dp                   ! Rosenbrock output
+        IERR = 0
 
-            ! Load in data from saved arrays
-            RCONST(:)   = RCONST_1D(:,I_CELL)
-            C(:)        = C_1D(:,I_CELL)
-            ICNTRL(:)   = ICNTRL_1D(:,I_CELL)
-            RCNTRL(:)   = RCNTRL_1D(:,I_CELL)
+        ! Load in data from saved arrays
+        RCONST(:)   = RCONST_1D(:,I_CELL)
+        C(:)        = C_1D(:,I_CELL)
+        ICNTRL(:)   = ICNTRL_1D(:,I_CELL)
+        RCNTRL(:)   = RCNTRL_1D(:,I_CELL)
 
-            ! In case we need to reset
-            C_before_integrate(:) = C(:)
-            CALL Timer_Start(   TimerName = "     Integrate 1",      &
-                                InLoop    =  .TRUE.,                 &
-                                ThreadNum = Thread,                  &
-                                RC        = RC                      )
-            ! Start timer
-            IF ( Input_Opt%useTimers ) THEN
-                CALL Timer_Start(   TimerName = "     Integrate 1",  &
-                                    InLoop    =  .TRUE.,             &
-                                    ThreadNum = Thread,              &
-                                    RC        = RC                  )
-            ENDIF
+        ! In case we need to reset
+        C_before_integrate(:) = C(:)
+        CALL Timer_Start(   TimerName = "     Integrate 1",      &
+                            InLoop    =  .TRUE.,                 &
+                            ThreadNum = Thread,                  &
+                            RC        = RC                      )
+        ! Start timer
+        IF ( Input_Opt%useTimers ) THEN
+            CALL Timer_Start(   TimerName = "     Integrate 1",  &
+                                InLoop    =  .TRUE.,             &
+                                ThreadNum = Thread,              &
+                                RC        = RC                  )
+        ENDIF
 
-            ! Call the Rosenbrock integrator
-            ! (with optional auto-reduce functionality)
-            CALL Integrate( TIN,    TOUT,    ICNTRL,                 &
-                            RCNTRL, ISTATUS, RSTATE, IERR           )
+        ! Call the Rosenbrock integrator
+        ! (with optional auto-reduce functionality)
+        CALL Integrate( TIN,    TOUT,    ICNTRL,                 &
+                        RCNTRL, ISTATUS, RSTATE, IERR           )
 
-            ! Stop timer
-            IF ( Input_Opt%useTimers ) THEN
-                CALL Timer_End( TimerName = "     Integrate 1",      &
-                                InLoop    = .TRUE.,                  &
-                                ThreadNum = Thread,                  &
-                                RC        = RC                      )
-            ENDIF
+        ! Stop timer
+        IF ( Input_Opt%useTimers ) THEN
             CALL Timer_End( TimerName = "     Integrate 1",      &
                             InLoop    = .TRUE.,                  &
                             ThreadNum = Thread,                  &
                             RC        = RC                      )
-            ! Add to diagnostic arrays
-            RSTATE_1D(:,I_CELL)  = RSTATE(:)
-            ISTATUS_1D(:,I_CELL) = ISTATUS(:)
+        ENDIF
+        CALL Timer_End( TimerName = "     Integrate 1",      &
+                        InLoop    = .TRUE.,                  &
+                        ThreadNum = Thread,                  &
+                        RC        = RC                      )
+        ! Add to diagnostic arrays
+        RSTATE_1D(:,I_CELL)  = RSTATE(:)
+        ISTATUS_1D(:,I_CELL) = ISTATUS(:)
 
-            ! Print grid box indices to screen if integrate failed
-            IF ( IERR < 0 ) THEN
+        ! Print grid box indices to screen if integrate failed
+        IF ( IERR < 0 ) THEN
 
-                ! Turn off error output after a certain limit is reached
-                IF ( .not. doSuppress ) THEN
-                    WRITE( 6, * ) '### INTEGRATE RETURNED ERROR AT: ', I, J, L
-                    errorCount = errorCount + 1
-                    IF ( errorCount > INTEGRATE_FAIL_TOGGLE ) THEN
-                        WRITE( 6, '(a)' ) &
-                        '### Further error output has been switched off'
-                        doSuppress = .TRUE.
-                    ENDIF
+            ! Turn off error output after a certain limit is reached
+            IF ( .not. doSuppress ) THEN
+                WRITE( 6, * ) '### INTEGRATE RETURNED ERROR AT: ', I, J, L
+                errorCount = errorCount + 1
+                IF ( errorCount > INTEGRATE_FAIL_TOGGLE ) THEN
+                    WRITE( 6, '(a)' ) &
+                    '### Further error output has been switched off'
+                    doSuppress = .TRUE.
                 ENDIF
+            ENDIF
 
 ! #if defined( MODEL_GEOS ) || defined( MODEL_WRF )
 !             ! Keep track of error boxes
@@ -1279,121 +1262,120 @@ CONTAINS
 !             ENDIF
 ! #endif
 
-                !=====================================================================
-                ! Try another time if it failed
-                !=====================================================================
+            !=====================================================================
+            ! Try another time if it failed
+            !=====================================================================
 
-                ! Zero the first time step (Hstart, used by Rosenbrock).  Also reset
-                ! C with concentrations prior to the 1st call to "Integrate".
-                RCNTRL(3) = 0.0_dp
-                C         = C_before_integrate
+            ! Zero the first time step (Hstart, used by Rosenbrock).  Also reset
+            ! C with concentrations prior to the 1st call to "Integrate".
+            RCNTRL(3) = 0.0_dp
+            C         = C_before_integrate
 
-                ! Disable auto-reduce solver for the second iteration for safety
-                IF ( Input_Opt%Use_AutoReduce ) THEN
-                    RCNTRL(12) = -1.0_dp ! without using ICNTRL
-                ENDIF
+            ! Disable auto-reduce solver for the second iteration for safety
+            IF ( Input_Opt%Use_AutoReduce ) THEN
+                RCNTRL(12) = -1.0_dp ! without using ICNTRL
+            ENDIF
 
-                ! Update rates again
-                ! NOT POSSIBLE - relevant arrays no longer exist
-                !CALL Update_RCONST( )
-                RCONST(:) = RCONST_1D(:,I_CELL)
+            ! Update rates again
+            ! NOT POSSIBLE - relevant arrays no longer exist
+            !CALL Update_RCONST( )
+            RCONST(:) = RCONST_1D(:,I_CELL)
 
-                ! Start timer
-                IF ( Input_Opt%useTimers ) THEN
-                    CALL Timer_Start( TimerName = "     Integrate 2",               &
-                                    InLoop    =  .TRUE.,                          &
-                                    ThreadNum = Thread,                           &
-                                    RC        = RC                               )
-                ENDIF
+            ! Start timer
+            IF ( Input_Opt%useTimers ) THEN
+                CALL Timer_Start( TimerName = "     Integrate 2",               &
+                                InLoop    =  .TRUE.,                          &
+                                ThreadNum = Thread,                           &
+                                RC        = RC                               )
+            ENDIF
 
-                ! Call the Rosenbrock integrator (w/ auto-reduction disabled)
-                CALL Integrate( TIN,    TOUT,    ICNTRL,                           &
-                                RCNTRL, ISTATUS, RSTATE, IERR                     )
+            ! Call the Rosenbrock integrator (w/ auto-reduction disabled)
+            CALL Integrate( TIN,    TOUT,    ICNTRL,                           &
+                            RCNTRL, ISTATUS, RSTATE, IERR                     )
 
-                ! Stop timer
-                IF ( Input_Opt%useTimers ) THEN
-                    CALL Timer_End( TimerName = "     Integrate 2",                 &
-                                    InLoop    =  .TRUE.,                            &
-                                    ThreadNum = Thread,                             &
-                                    RC        = RC                                 )
-                ENDIF
+            ! Stop timer
+            IF ( Input_Opt%useTimers ) THEN
+                CALL Timer_End( TimerName = "     Integrate 2",                 &
+                                InLoop    =  .TRUE.,                            &
+                                ThreadNum = Thread,                             &
+                                RC        = RC                                 )
+            ENDIF
 
-                ! Again, store ISTATUS and RSTATE
-                ! ISTATUS is all counts
-                ISTATUS_1D(:,I_CELL) = ISTATUS_1D(:,I_CELL) + ISTATUS(:)
-                RSTATE_1D(:,I_CELL) = RSTATE(:)
+            ! Again, store ISTATUS and RSTATE
+            ! ISTATUS is all counts
+            ISTATUS_1D(:,I_CELL) = ISTATUS_1D(:,I_CELL) + ISTATUS(:)
+            RSTATE_1D(:,I_CELL) = RSTATE(:)
 
-                !==================================================================
-                ! Exit upon the second failure
-                !==================================================================
-                IF ( IERR < 0 ) THEN
+            !==================================================================
+            ! Exit upon the second failure
+            !==================================================================
+            IF ( IERR < 0 ) THEN
 
-                    ! Print error message
-                    WRITE(6,     '(a   )' ) '## INTEGRATE FAILED TWICE !!! '
-                    WRITE(ERRMSG,'(a,i3)' ) 'Integrator error code :', IERR
+                ! Print error message
+                WRITE(6,     '(a   )' ) '## INTEGRATE FAILED TWICE !!! '
+                WRITE(ERRMSG,'(a,i3)' ) 'Integrator error code :', IERR
 
 #if defined( MODEL_GEOS ) || defined( MODEL_WRF )
-                    IF ( Input_Opt%KppStop ) THEN
-                        CALL ERROR_STOP(ERRMSG, 'INTEGRATE_KPP')
-                    ELSE
-                        ! Revert to concentrations prior to 1st call to "Integrate"
-                        C = C_before_integrate
-                    ENDIF
-
-                    !! Keep track of error boxes
-                    !IF ( State_Diag%Archive_KppError ) THEN
-                    !   State_Diag%KppError(I,J,L) = State_Diag%KppError(I,J,L) + 1.0
-                    !ENDIF
-#else
-                    !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-                    ! Make sure only one thread at a time executes this block
-                    !$OMP CRITICAL
-                    !
-                    ! Set a flag to break out of loop gracefully
-                    ! NOTE: You can set a GDB breakpoint here to examine the error
-                    Failed2x = .TRUE.
-
-                    ! Print concentrations at failure grid box
-                    PRINT*, REPEAT( '#', 79 )
-                    PRINT*, '### KPP DEBUG OUTPUT!'
-                    PRINT*, '### Species concentrations'! at problem box ', I, J, L
-                    PRINT*, REPEAT( '#', 79 )
-                    DO N = 1, NSPEC
-                        PRINT*, C(N), TRIM( ADJUSTL( SPC_NAMES(N) ) )
-                    ENDDO
-
-                    ! Print rate constants at failure grid box
-                    PRINT*, REPEAT( '#', 79 )
-                    PRINT*, '### KPP DEBUG OUTPUT!'
-                    PRINT*, '### Reaction rates'! at problem box ', I, J, L
-                    PRINT*, REPEAT( '#', 79 )
-                    DO N = 1, NREACT
-                        PRINT*, RCONST(N), TRIM( ADJUSTL( EQN_NAMES(N) ) )
-                    ENDDO
-                    !
-                    !$OMP END CRITICAL
-                    !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-                    ! Start skipping to end of loop upon 2 failures in a row
-                    CYCLE
-#endif
+                IF ( Input_Opt%KppStop ) THEN
+                    CALL ERROR_STOP(ERRMSG, 'INTEGRATE_KPP')
+                ELSE
+                    ! Revert to concentrations prior to 1st call to "Integrate"
+                    C = C_before_integrate
                 ENDIF
 
+                !! Keep track of error boxes
+                !IF ( State_Diag%Archive_KppError ) THEN
+                !   State_Diag%KppError(I,J,L) = State_Diag%KppError(I,J,L) + 1.0
+                !ENDIF
+#else
+                !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                ! Make sure only one thread at a time executes this block
+                !$OMP CRITICAL
+                !
+                ! Set a flag to break out of loop gracefully
+                ! NOTE: You can set a GDB breakpoint here to examine the error
+                Failed2x = .TRUE.
+
+                ! Print concentrations at failure grid box
+                PRINT*, REPEAT( '#', 79 )
+                PRINT*, '### KPP DEBUG OUTPUT!'
+                PRINT*, '### Species concentrations'! at problem box ', I, J, L
+                PRINT*, REPEAT( '#', 79 )
+                DO N = 1, NSPEC
+                    PRINT*, C(N), TRIM( ADJUSTL( SPC_NAMES(N) ) )
+                ENDDO
+
+                ! Print rate constants at failure grid box
+                PRINT*, REPEAT( '#', 79 )
+                PRINT*, '### KPP DEBUG OUTPUT!'
+                PRINT*, '### Reaction rates'! at problem box ', I, J, L
+                PRINT*, REPEAT( '#', 79 )
+                DO N = 1, NREACT
+                    PRINT*, RCONST(N), TRIM( ADJUSTL( EQN_NAMES(N) ) )
+                ENDDO
+                !
+                !$OMP END CRITICAL
+                !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+                ! Start skipping to end of loop upon 2 failures in a row
+                CYCLE
+#endif
             ENDIF
 
-        !=====================================================================
-        ! Continue upon successful return...
-        !=====================================================================
+        ENDIF
 
-            ! Revert Alkalinity (only when using sulfur chemistry in KPP)
-            IF ( .not. State_Chm%Do_SulfateMod_SeaSalt ) THEN
-                CALL fullchem_ConvertEquivToAlk()
-            ENDIF
+    !=====================================================================
+    ! Continue upon successful return...
+    !=====================================================================
 
-            ! Copy C back into C_1D
-            C_1D(:,I_CELL) = C(:)
-            RCONST_1D(:,I_CELL) = RCONST(:)
-        ENDDO
+        ! Revert Alkalinity (only when using sulfur chemistry in KPP)
+        IF ( .not. State_Chm%Do_SulfateMod_SeaSalt ) THEN
+            CALL fullchem_ConvertEquivToAlk()
+        ENDIF
+
+        ! Copy C back into C_1D
+        C_1D(:,I_CELL) = C(:)
+        RCONST_1D(:,I_CELL) = RCONST(:)
     ENDDO
 
 #ifdef MODEL_GCHPCTM
@@ -3414,10 +3396,10 @@ CONTAINS
     ! NCELL_max:   Max number of cells to be computed on any domain
     CALL Timer_Add("     Integrate 1",         RC )
 
-    Allocate(local_indices   (NCELL_max)       , STAT=RC)
-    CALL GC_CheckVar( 'fullchem_mod.F90:local_indices', 0, RC )
+    Allocate(skip_indicies   (NCELL_max)       , STAT=RC)
+    CALL GC_CheckVar( 'fullchem_mod.F90:skip_indicies', 0, RC )
     IF ( RC /= GC_SUCCESS ) Then
-        CALL GC_Error( 'Failed to allocate local_indices', RC, ThisLoc )
+        CALL GC_Error( 'Failed to allocate skip_indicies', RC, ThisLoc )
         RETURN
     END IF
     Allocate(C_1D      (NSPEC,NCELL_max) , STAT=RC)
@@ -3579,9 +3561,9 @@ CONTAINS
     ENDIF
 
     ! Arrays for load balancing
-    If ( ALLOCATED( local_indices ) ) Then
-       Deallocate(local_indices, STAT=RC)
-       CALL GC_CheckVar( 'fullchem_mod.F90:local_indices', 2, RC )
+    If ( ALLOCATED( skip_indicies ) ) Then
+       Deallocate(skip_indicies, STAT=RC)
+       CALL GC_CheckVar( 'fullchem_mod.F90:skip_indicies', 2, RC )
        IF ( RC /= GC_SUCCESS ) RETURN
     ENDIF
 
