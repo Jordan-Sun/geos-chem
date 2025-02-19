@@ -252,7 +252,7 @@ CONTAINS
     ! All the KPP inputs remapped to a 1-D array
     INTEGER                :: NCELL, NCELL_local, I_CELL
     INTEGER                :: this_PET, request
-    TYPE(MPI_Request)      :: requests(4)
+    TYPE(MPI_Request)      :: send_requests(4), recv_requests(4)
 
     ! For tagged CO saving
     REAL(fp)               :: LCH4, PCO_TOT, PCO_CH4, PCO_NMVOC
@@ -1154,19 +1154,19 @@ CONTAINS
         CALL MPI_Isend( &
             C_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
             reassignment_data(interval)%next_PET, 0, &
-            Input_Opt%mpiComm, request, RC)
+            Input_Opt%mpiComm, send_requests(1), RC)
         CALL MPI_Isend( &
             RCONST_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
             reassignment_data(interval)%next_PET, 1, &
-            Input_Opt%mpiComm, request, RC)
+            Input_Opt%mpiComm, send_requests(2), RC)
         CALL MPI_Isend( &
             I_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
             reassignment_data(interval)%next_PET, 2, &
-            Input_Opt%mpiComm, request, RC)
+            Input_Opt%mpiComm, send_requests(3), RC)
         CALL MPI_Isend( &
             R_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
             reassignment_data(interval)%next_PET, 3, &
-            Input_Opt%mpiComm, request, RC)
+            Input_Opt%mpiComm, send_requests(4), RC)
 #ifdef HIRES_TIMER
         TimerEnd = rdtsc()
         ! Write both times to timer log file
@@ -1176,19 +1176,19 @@ CONTAINS
         CALL MPI_Irecv( &
             C_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
             reassignment_data(interval)%prev_PET, 0, &
-            Input_Opt%mpiComm, requests(1), RC)
+            Input_Opt%mpiComm, recv_requests(1), RC)
         CALL MPI_Irecv( &
             RCONST_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
             reassignment_data(interval)%prev_PET, 1, &
-            Input_Opt%mpiComm, requests(2), RC)
+            Input_Opt%mpiComm, recv_requests(2), RC)
         CALL MPI_Irecv( &
             I_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
             reassignment_data(interval)%prev_PET, 2, &
-            Input_Opt%mpiComm, requests(3), RC)
+            Input_Opt%mpiComm, recv_requests(3), RC)
         CALL MPI_Irecv( &
             R_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
             reassignment_data(interval)%prev_PET, 3, &
-            Input_Opt%mpiComm, requests(4), RC)
+            Input_Opt%mpiComm, recv_requests(4), RC)
     ENDIF ! load balancing
 #endif
 
@@ -1403,7 +1403,7 @@ CONTAINS
         TimerStart = rdtsc()
 #endif
         ! Wait for the asynchronous receive to complete
-        CALL MPI_Waitall(4, requests, MPI_STATUSES_IGNORE, RC)
+        CALL MPI_Waitall(4, recv_requests, MPI_STATUSES_IGNORE, RC)
 #ifdef HIRES_TIMER
         TimerEnd = rdtsc()
         ! Write both times to timer log file
@@ -1654,7 +1654,7 @@ CONTAINS
 
         TimerStart = rdtsc()
 #endif
-        ! Pass the actual data
+        ! Pass the computed data back to the previous PET
         CALL MPI_Isend( &
             C_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
             reassignment_data(interval)%prev_PET, 4, &
@@ -1679,6 +1679,9 @@ CONTAINS
         
         TimerStart = rdtsc()
 #endif
+        ! Wait for the asynchronous send to complete in case we are moving too fast
+        CALL MPI_Waitall(4, send_requests, MPI_STATUSES_IGNORE, RC)
+        ! Receive the computed data from the next PET
         CALL MPI_Recv( &
             C_send(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
             reassignment_data(interval)%next_PET, 4, &
