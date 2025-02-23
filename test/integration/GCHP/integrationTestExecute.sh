@@ -2,13 +2,14 @@
 
 #SBATCH -n 24
 #SBATCH -N 1
-#SBATCH -t 0-3:30
+#SBATCH -c 1
+#SBATCH -t 0-5:00
 #SBATCH -p REQUESTED_PARTITION
-#SBATCH --mem=90000
+#SBATCH --mem=150000
 #SBATCH --mail-type=END
 #BSUB -q REQUESTED_PARTITION
 #BSUB -n 24
-#BSUB -W 3:30
+#BSUB -W 5:00
 #BSUB -R "rusage[mem=90GB] span[ptile=1] select[mem < 2TB]"
 #BSUB -a 'docker(registry.gsc.wustl.edu/sleong/esm:intel-2021.1.2)'
 #BSUB -o lsf-%J.txt
@@ -48,40 +49,30 @@ envDir="${itRoot}/${ENV_DIR}"
 codeDir="${itRoot}/CodeDir"
 logsDir="${itRoot}/${LOGS_DIR}"
 rundirsDir="${itRoot}/${RUNDIRS_DIR}"
+site=$(get_site_name)
 
 # Load the environment and the software environment
-. ~/.bashrc          > /dev/null 2>&1
-. ${envDir}/gchp.env > /dev/null 2>&1
+. ~/.bashrc > /dev/null 2>&1
+[[ "X${site}" == "XCANNON" ]] && . ${envDir}/gchp.env > /dev/null 2>&1
 
-# Get the Git commit of the superproject and submodules
-head_gchp=$(export GIT_DISCOVERY_ACROSS_FILESYSTEM=1; \
-           git -C "${codeDir}" log --oneline --no-decorate -1)
-head_gc=$(export GIT_DISCOVERY_ACROSS_FILESYSTEM=1; \
-          git -C "${codeDir}/src/GCHP_GridComp/GEOSChem_GridComp/geos-chem" \
-          log --oneline --no-decorate -1)
-head_hco=$(export GIT_DISCOVERY_ACROSS_FILESYSTEM=1; \
-           git -C "${codeDir}/src/GCHP_GridComp/HEMCO_GridComp/HEMCO" \
-           log --oneline --no-decorate -1)
+# Site-specific settings
+if [[ "X${site}" == "XCANNON" && "X${SLURM_JOBID}" != "X" ]]; then
 
-# Determine the scheduler from the job ID (or lack of one)
-scheduler="none"
-[[ "x${SLURM_JOBID}" != "x" ]] && scheduler="SLURM"
-[[ "x${LSB_JOBID}"   != "x" ]] && scheduler="LSF"
+    #----------------------------------
+    # SLURM settings (Harvard Cannon)
+    #----------------------------------
 
-if [[ "x${scheduler}" == "xSLURM" ]]; then
+    # Set OMP_NUM_THREADS to the same # of cores requested with #SBATCH -c
+    export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK}
+
+elif [[ "X${site}" == "XCOMPUTE1" && "X${LSB_JOBID}" != "X" ]]; then
 
     #---------------------------------
-    # Run via SLURM (Harvard Cannon)
+    # LSF settings (WashU Compute1)
     #---------------------------------
 
-    # Cannon-specific setting to get around connection issues at high # cores
-    export OMPI_MCL_btl=openib
-
-elif [[ "x${scheduler}" == "xLSF" ]]; then
-
-    #---------------------------------
-    # Run via LSF (WashU Compute1)
-    #---------------------------------
+    # Set OMP_NUM_THREADS to the same # of cores requested with #BSUB -n
+    export OMP_NUM_THREADS=${LSB_DJOB_NUMPROC}
 
     # Unlimit resources to prevent OS killing GCHP due to resource usage/
     # Alternatively you can put this in your environment file.
@@ -90,16 +81,18 @@ elif [[ "x${scheduler}" == "xLSF" ]]; then
     ulimit -u 50000              # maxproc
     ulimit -v unlimited          # vmemoryuse
     ulimit -s unlimited          # stacksize
-
+    
 else
 
     #---------------------------------
-    # Run interactively
+    # Interactive settings
     #---------------------------------
+    echo ""
+    echo "Execution tests running..."
 
     # For AWS, set $OMP_NUM_THREADS to the available cores
     kernel=$(uname -r)
-    [[ "x${kernel}" == "xaws" ]] && export OMP_NUM_THREADS=$(nproc)
+    [[ "X${kernel}" == "Xaws" ]] && export OMP_NUM_THREADS=$(nproc)
 
 fi
 
@@ -125,15 +118,13 @@ rm -f "${results}"
 print_to_log "${SEP_MAJOR}"                               "${results}"
 print_to_log "GCHP: Execution Test Results"               "${results}"
 print_to_log ""                                           "${results}"
-print_to_log "GCClassic #${head_gchp}"                    "${results}"
-print_to_log "GEOS-Chem #${head_gc}"                      "${results}"
-print_to_log "HEMCO     #${head_hco}"                     "${results}"
+print_submodule_head_commits "14" "${codeDir}"            "${results}"
 print_to_log ""                                           "${results}"
 print_to_log "Number of execution tests: ${numTests}"     "${results}"
 print_to_log ""                                           "${results}"
-if [[ "x${scheduler}" == "xSLURM" ]]; then
+if [[ "X${SLURM_JOBID}" != "X" ]]; then
     print_to_log "Submitted as SLURM job: ${SLURM_JOBID}" "${results}"
-elif  [[ "x${scheduler}" == "xLSF" ]]; then
+elif  [[ "X${LSB_JOBID}" == "XCOMPUTE1" ]]; then
     print_to_log "Submitted as LSF job: ${LSB_JOBID}"     "${results}"
 else
     print_to_log "Submitted as interactive job"           "${results}"
@@ -174,7 +165,7 @@ for runDir in *; do
         failMsg="$runDir${FILL:${#runDir}}.....${EXE_FAIL_STR}"
 
         # Get the executable file corresponding to this run directory
-        exeFile=$(exe_name "gchp" "${runAbsPath}")
+        exeFile=$(exe_name "gchp" "${runDir}")
 
         # Test if the executable exists
         if [[ -f "${binDir}/${exeFile}" ]]; then
@@ -193,12 +184,16 @@ for runDir in *; do
             # on Compute1.  We will later replace this test with
             # a test on the site name instead of on the scheduler.
             # TODO: Test on name rather than scheduler
-            if [[ "x${scheduler}" == "xLSF" ]]; then
+            if [[ "X${site}" == "XCOMPUTE1" ]]; then
 		chmod 755 -R "${runAbsPath}"
             fi
 
             # Remove any leftover files in the run dir
             ./cleanRunDir.sh --no-interactive >> "${log}" 2>&1
+
+	    # Also reset cap_restart to 00:00:00 UTC,
+	    # in case we are restarting the tests maually
+	    sed_ie 's/ ....00/ 000000/g' cap_restart
 
             # Link to the environment file
             ./setEnvironmentLink.sh "${envDir}/gchp.env"
@@ -217,7 +212,7 @@ for runDir in *; do
             done
 
             # Run GCHP and evenly distribute tasks across nodes
-            if [[ "x${scheduler}" == "xSLURM" ]]; then
+            if [[ "X${site}" == "XCANNON" && "X${SLURM_JOBID}" != "X" ]]; then
 
 		#---------------------------------------------
 		# Executing GCHP on SLURM (Harvard Cannon)
@@ -238,7 +233,7 @@ for runDir in *; do
 		srun -n ${coreCt} -N ${SLURM_NNODES} -m plane=${planeCt} \
 		     --mpi=pmix ./${exeFile} >> "${log}" 2>&1
 
-            elif [[ "x${scheduler}" == "xLSF" ]]; then
+            elif [[ "X${scheduler}" == "xLSF" && "X${LSB_JOBID}" != "X" ]]; then
 
 		#---------------------------------------------
 		# Executing GCHP on LSF (WashU Compute1)
@@ -304,14 +299,14 @@ print_to_log "Execution tests failed: ${failed}"            ${results}
 print_to_log "Execution tests not yet completed: ${remain}" ${results}
 
 # Check if all tests passed
-if [[ "x${passed}" == "x${numTests}" ]]; then
+if [[ "X${passed}" == "X${numTests}" ]]; then
     print_to_log ""                                         ${results}
     print_to_log "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"    ${results}
     print_to_log "%%%  All execution tests passed!  %%%"    ${results}
     print_to_log "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"    ${results}
 
     # Print success (if interactive)
-    if [[ "x${SLURM_JOBID}" == "x" && "x${LSB_JOBID}" == "x" ]]; then
+    if [[ "X${SLURM_JOBID}" == "X" && "X${LSB_JOBID}" == "X" ]]; then
         echo ""
         echo "Execution tests finished!"
     fi
@@ -321,7 +316,7 @@ else
     #--------------------------
     # Unsuccessful execution
     #--------------------------
-    if [[ "x${SLURM_JOBID}" == "x" && "x${LSB_JOBID}" == "x" ]]; then
+    if [[ "X${SLURM_JOBID}" == "X" && "X${LSB_JOBID}" == "X" ]]; then
         echo ""
         echo "Execution tests failed!  Exiting ..."
     fi

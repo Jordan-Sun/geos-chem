@@ -45,6 +45,8 @@ MODULE Phot_Container_Mod
      INTEGER :: NEMISS    ! ??                     
      INTEGER :: NASPECRAD ! # RRTMG aerosol species
      INTEGER :: NSPECRAD  ! # RRTMG aerosol+gas species
+     INTEGER :: NDRg      ! # LUT SNA and OM dry aerosol size bin 
+     INTEGER :: DRg       ! # identifier of the default dry aerosol size 
 
      ! Scalars
      INTEGER  :: JTAUMX      ! max # divisions
@@ -107,19 +109,19 @@ MODULE Phot_Container_Mod
      REAL*8,  ALLOCATABLE :: ACOEF_RTWV(:)   ! Coeffs for RT WL interpolation
      REAL*8,  ALLOCATABLE :: BCOEF_RTWV(:)   ! Coeffs for RT WL interpolation
      REAL*8,  ALLOCATABLE :: CCOEF_RTWV(:)   ! Coeffs for RT WL interpolation
-     REAL*8,  ALLOCATABLE :: WVAA      (:,:)     ! ??
-     REAL*8,  ALLOCATABLE :: RHAA      (:,:)     ! ??
-     REAL*8,  ALLOCATABLE :: RDAA      (:,:)     ! ??
-     REAL*8,  ALLOCATABLE :: RWAA      (:,:)     ! ??
-     REAL*8,  ALLOCATABLE :: SGAA      (:,:)     ! ??
-     REAL*8,  ALLOCATABLE :: REAA      (:,:)     ! ??
-     REAL*8,  ALLOCATABLE :: NRLAA     (:,:,:)   ! ??
-     REAL*8,  ALLOCATABLE :: NCMAA     (:,:,:)   ! ??
-     REAL*8,  ALLOCATABLE :: QQAA      (:,:,:)   ! ??
-     REAL*8,  ALLOCATABLE :: ALPHAA    (:,:,:)   ! ??
-     REAL*8,  ALLOCATABLE :: SSAA      (:,:,:)   ! ??
-     REAL*8,  ALLOCATABLE :: ASYMAA    (:,:,:)   ! ??
-     REAL*8,  ALLOCATABLE :: PHAA      (:,:,:,:) ! ??
+     REAL*8,  ALLOCATABLE :: WVAA      (:,:)     ! Wavelength read from LUTs (so4.dat etc.)
+     REAL*8,  ALLOCATABLE :: RHAA      (:,:)     ! RH read from LUTs (so4.dat etc.)
+     REAL*8,  ALLOCATABLE :: RDAA      (:,:,:)   ! Dry aerosol Rg read from LUTs (so4.dat etc.)
+     REAL*8,  ALLOCATABLE :: RWAA      (:,:,:)   ! Wet aerosol Rg read from LUTs (so4.dat etc.)
+     REAL*8,  ALLOCATABLE :: SGAA      (:,:)     ! Aerosol size geometric std. read from LUTs (so4.dat etc.)
+     REAL*8,  ALLOCATABLE :: REAA      (:,:,:)   ! Effective Radius read from LUTs (so4.dat etc.)
+     REAL*8,  ALLOCATABLE :: NRLAA     (:,:,:)   ! RI real part read from LUTs (so4.dat etc.)
+     REAL*8,  ALLOCATABLE :: NCMAA     (:,:,:)   ! RI imaginary part read from LUTs (so4.dat etc.)
+     REAL*8,  ALLOCATABLE :: QQAA      (:,:,:,:) ! Extinction Effciency read from LUTs (so4.dat etc.)
+     REAL*8,  ALLOCATABLE :: ALPHAA    (:,:,:,:) ! Alpha read from LUTs (so4.dat etc.)
+     REAL*8,  ALLOCATABLE :: SSAA      (:,:,:,:) ! ss-alb read from LUTs (so4.dat etc.)
+     REAL*8,  ALLOCATABLE :: ASYMAA    (:,:,:,:) ! g-sym read from LUTs (so4.dat etc.)
+     REAL*8,  ALLOCATABLE :: PHAA      (:,:,:,:,:) ! phase function read from LUTs (so4.dat etc.)
 
      ! For optical depth diagnostics
      REAL(fp), ALLOCATABLE :: ISOPOD   (:,:,:,:)   ! Isoprene optical depth
@@ -162,7 +164,11 @@ CONTAINS
 !
 ! !USES:
 !
-    USE CMN_FJX_Mod,    ONLY : A_, AN_, W_, WX_, JVN_, N_, JXL_
+#ifdef FASTJX
+    USE CMN_FJX_Mod,    ONLY : A_, AN_, W_, WX_, JVN_, N_, L_
+#else
+    USE Cldj_Cmn_Mod,   ONLY : A_, AN_, W_, WX_, JVN_, N_, L_
+#endif
     USE CMN_Size_Mod,   ONLY : NDUST, NAER
     USE ErrCode_Mod
     USE Input_Opt_Mod,  ONLY : OptInput
@@ -209,7 +215,9 @@ CONTAINS
     Phot%NALBD  = 2     ! ??                     
     Phot%NEMISS = 16    ! ??                     
     Phot%NASPECRAD = 16 ! # RRTMG aerosol species
-    Phot%NSPECRAD  = 18 ! # RRTMG aerosol+gas species
+    Phot%NSPECRAD  = 23 ! # RRTMG aerosol+gas species
+    Phot%NDRg   = 40    ! # LUT dry SNA and OM aerosol sizes 
+    Phot%DRg    = 6     ! # identifier of the default aerosol size
 
     ! Store certain values from Fast-JX with more intuitive name
     Phot%nWLbins      = W_
@@ -217,7 +225,7 @@ CONTAINS
     Phot%nMaxPhotRxns = JVN_! Maximum # of photolysis reactions (JVN_?)
 
     ! Integer scalars
-    Phot%JTAUMX = (N_-4*JXL_)/2
+    Phot%JTAUMX = (N_-4*L_)/2
 
     Phot%RXN_O2     = -1
     Phot%RXN_O3_1   = -1
@@ -501,8 +509,8 @@ CONTAINS
        ENDIF
        Phot%RHAA = 0d0
     
-       ! Phot%RDAA      (:,:)!
-       ALLOCATE( Phot%RDAA( Phot%NRAA, Phot%NSPAA ), STAT=RC )
+       ! Phot%RDAA      (:,:,:) ! H. Zhu
+       ALLOCATE( Phot%RDAA( Phot%NRAA, Phot%NSPAA, Phot%NDRg), STAT=RC )
        IF ( RC /= GC_SUCCESS ) THEN
           errMsg = 'Error allocating array RDAA!'
           CALL GC_Error( errMsg, RC, thisLoc )
@@ -510,8 +518,8 @@ CONTAINS
        ENDIF
        Phot%RDAA = 0d0
     
-       ! Phot%RWAA      (:,:)
-       ALLOCATE( Phot%RWAA( Phot%NRAA, Phot%NSPAA ), STAT=RC )
+       ! Phot%RWAA      (:,:,:) ! H. Zhu
+       ALLOCATE( Phot%RWAA( Phot%NRAA, Phot%NSPAA, Phot%NDRg ), STAT=RC )
        IF ( RC /= GC_SUCCESS ) THEN
           errMsg = 'Error allocating array RWAA!'
           CALL GC_Error( errMsg, RC, thisLoc )
@@ -528,8 +536,8 @@ CONTAINS
        ENDIF
        Phot%SGAA = 0d0
     
-       ! Phot%REAA      (:,:)
-       ALLOCATE( Phot%REAA( Phot%NRAA, Phot%NSPAA ), STAT=RC )
+       ! Phot%REAA      (:,:,:)
+       ALLOCATE( Phot%REAA( Phot%NRAA, Phot%NSPAA, Phot%NDRg ), STAT=RC )
        IF ( RC /= GC_SUCCESS ) THEN
           errMsg = 'Error allocating array REAA!'
           CALL GC_Error( errMsg, RC, thisLoc )
@@ -555,8 +563,8 @@ CONTAINS
        ENDIF
        Phot%NCMAA = 0d0
     
-       ! Phot%QQAA      (:,:,:)
-       ALLOCATE( Phot%QQAA( Phot%NWVAA, Phot%NRAA, Phot%NSPAA ), STAT=RC )
+       ! Phot%QQAA      (:,:,:,:)
+       ALLOCATE( Phot%QQAA( Phot%NWVAA, Phot%NRAA, Phot%NSPAA, Phot%NDRg ), STAT=RC )
        IF ( RC /= GC_SUCCESS ) THEN
           errMsg = 'Error allocating array QQAA!'
           CALL GC_Error( errMsg, RC, thisLoc )
@@ -564,8 +572,8 @@ CONTAINS
        ENDIF
        Phot%QQAA = 0d0
     
-       ! Phot%ALPHAA    (:,:,:)
-       ALLOCATE( Phot%ALPHAA( Phot%NWVAA, Phot%NRAA, Phot%NSPAA ), &
+       ! Phot%ALPHAA    (:,:,:,:)
+       ALLOCATE( Phot%ALPHAA( Phot%NWVAA, Phot%NRAA, Phot%NSPAA, Phot%NDRg ), &
                  STAT=RC )
        IF ( RC /= GC_SUCCESS ) THEN
           errMsg = 'Error allocating array ALPHAA!'
@@ -574,8 +582,8 @@ CONTAINS
        ENDIF
        Phot%ALPHAA = 0d0
     
-       ! Phot%SSAA      (:,:,:)
-       ALLOCATE( Phot%SSAA( Phot%NWVAA, Phot%NRAA, Phot%NSPAA ), STAT=RC )
+       ! Phot%SSAA      (:,:,:,:)
+       ALLOCATE( Phot%SSAA( Phot%NWVAA, Phot%NRAA, Phot%NSPAA, Phot%NDRg ), STAT=RC )
        IF ( RC /= GC_SUCCESS ) THEN
           errMsg = 'Error allocating array SSAA!'
           CALL GC_Error( errMsg, RC, thisLoc )
@@ -583,8 +591,8 @@ CONTAINS
        ENDIF
        Phot%SSAA = 0d0
     
-       ! Phot%ASYMAA    (:,:,:)
-       ALLOCATE( Phot%ASYMAA( Phot%NWVAA, Phot%NRAA, Phot%NSPAA ), &
+       ! Phot%ASYMAA    (:,:,:,:)
+       ALLOCATE( Phot%ASYMAA( Phot%NWVAA, Phot%NRAA, Phot%NSPAA, Phot%NDRg ), &
                  STAT=RC )
        IF ( RC /= GC_SUCCESS ) THEN
           errMsg = 'Error allocating array ASYMAA!'
@@ -594,7 +602,7 @@ CONTAINS
        Phot%ASYMAA = 0d0
     
        ! Phot%PHAA      (:,:,:,:)
-       ALLOCATE( Phot%PHAA( Phot%NWVAA, Phot%NRAA, Phot%NSPAA, 8 ), &
+       ALLOCATE( Phot%PHAA( Phot%NWVAA, Phot%NRAA, Phot%NSPAA, 8, Phot%NDRg ), &
                  STAT=RC )
        IF ( RC /= GC_SUCCESS ) THEN
           errMsg = 'Error allocating array PHAA!'
@@ -754,6 +762,7 @@ CONTAINS
        IF (ALLOCATED(Phot%RTASYMAER     )) DEALLOCATE(Phot%RTASYMAER )
 #endif
 
+       DEALLOCATE( Phot )
        Phot => NULL()
     ENDIF
 

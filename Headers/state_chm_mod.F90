@@ -21,6 +21,7 @@ MODULE State_Chm_Mod
 !
 ! USES:
 !
+  USE AerMass_Container_Mod              ! Aerosol mass object          
   USE Dictionary_M, ONLY : dictionary_t  ! Fortran hash table type
   USE ErrCode_Mod                        ! Error handling
   USE Phot_Container_Mod                 ! For photolysis state object
@@ -83,14 +84,18 @@ MODULE State_Chm_Mod
      INTEGER                    :: nPhotol              ! # photolysis species
      INTEGER                    :: nProd                ! # of prod species
      INTEGER                    :: nRadNucl             ! # of radionuclides
+     INTEGER                    :: nTomasBins           ! # of bins for TOMAS
      INTEGER                    :: nTracer              ! # of transport tracers
      INTEGER                    :: nWetDep              ! # wetdep species
 
      !-----------------------------------------------------------------------
      ! Mapping vectors to subset types of species
      !-----------------------------------------------------------------------
+     REAL(f8),          POINTER :: KPP_AbsTol (:      ) ! KPP absolute tolerance
+     REAL(f8),          POINTER :: KPP_RelTol (:      ) ! KPP relative tolerance
      INTEGER,           POINTER :: Map_Advect (:      ) ! Advected species IDs
      INTEGER,           POINTER :: Map_Aero   (:      ) ! Aerosol species IDs
+     INTEGER,           POINTER :: Map_All    (:      ) ! All species IDs
      INTEGER,           POINTER :: Map_DryAlt (:      ) ! Dryalt species IDs
      INTEGER,           POINTER :: Map_DryDep (:      ) ! Drydep species IDs
      INTEGER,           POINTER :: Map_GasSpc (:      ) ! Gas species IDs
@@ -120,8 +125,6 @@ MODULE State_Chm_Mod
      TYPE(SpcConc),     POINTER :: Species (:      )    ! Vector for species
                                                         ! concentrations
                                                         !  [kg/kg dry air]
-     CHARACTER(LEN=20)          :: Spc_Units            ! Species units
-
 #ifdef ADJOINT
      REAL(fp),          POINTER :: SpeciesAdj (:,:,:,:) ! Species adjoint variables
      REAL(fp),          POINTER :: CostFuncMask(:,:,:)  ! cost function volume mask
@@ -142,23 +145,24 @@ MODULE State_Chm_Mod
      !-----------------------------------------------------------------------
      ! Aerosol quantities
      !-----------------------------------------------------------------------
-     REAL(fp),          POINTER :: AeroArea   (:,:,:,:) ! Aerosol Area [cm2/cm3]
-     REAL(fp),          POINTER :: AeroRadi   (:,:,:,:) ! Aerosol Radius [cm]
-     REAL(fp),          POINTER :: WetAeroArea(:,:,:,:) ! Aerosol Area [cm2/cm3]
-     REAL(fp),          POINTER :: WetAeroRadi(:,:,:,:) ! Aerosol Radius [cm]
-     REAL(fp),          POINTER :: AeroH2O    (:,:,:,:) ! Aerosol water [cm3/cm3]
-     REAL(fp),          POINTER :: GammaN2O5  (:,:,:,:) ! N2O5 aerosol uptake [unitless]
-     REAL(fp),          POINTER :: SSAlk      (:,:,:,:) ! Sea-salt alkalinity[-]
-     REAL(fp),          POINTER :: H2O2AfterChem(:,:,:) ! H2O2, SO2 [v/v]
-     REAL(fp),          POINTER :: SO2AfterChem (:,:,:) !  after sulfate chem
-     REAL(fp),          POINTER :: OMOC           (:,:) ! OM:OC Ratio [unitless]
-     REAL(fp),          POINTER :: OMOC_POA       (:,:) ! OM:OC Ratio (OCFPOA) [unitless]
-     REAL(fp),          POINTER :: OMOC_OPOA      (:,:) ! OM:OC Ratio (OCFOPOA) [unitless]
-     REAL(fp),          POINTER :: ACLArea      (:,:,:) ! Fine Cl- Area [cm2/cm3]
-     REAL(fp),          POINTER :: ACLRadi      (:,:,:) ! Fine Cl- Radius [cm]
-     REAL(fp),          POINTER :: QLxpHCloud   (:,:,:) !
-     REAL(fp),          POINTER :: SoilDust   (:,:,:,:) ! Soil dust [kg/m3]
-     REAL(fp),          POINTER :: ORVCsesq     (:,:,:) ! Sesquiterpenes mass [kg/box]
+     TYPE(AerMassContainer), POINTER :: AerMass ! Aerosol mass data object
+     REAL(fp), POINTER :: AeroArea   (:,:,:,:)  ! Aerosol Area [cm2/cm3]
+     REAL(fp), POINTER :: AeroRadi   (:,:,:,:)  ! Aerosol Radius [cm]
+     REAL(fp), POINTER :: WetAeroArea(:,:,:,:)  ! Aerosol Area [cm2/cm3]
+     REAL(fp), POINTER :: WetAeroRadi(:,:,:,:)  ! Aerosol Radius [cm]
+     REAL(fp), POINTER :: AeroH2O    (:,:,:,:)  ! Aerosol water [cm3/cm3]
+     REAL(fp), POINTER :: GammaN2O5  (:,:,:,:)  ! N2O5 aerosol uptake [unitless]
+     REAL(fp), POINTER :: SSAlk      (:,:,:,:)  ! Sea-salt alkalinity[-]
+     REAL(fp), POINTER :: H2O2AfterChem(:,:,:)  ! H2O2, SO2 [v/v]
+     REAL(fp), POINTER :: SO2AfterChem (:,:,:)  !  after sulfate chem
+     REAL(fp), POINTER :: OMOC           (:,:)  ! OM:OC Ratio [unitless]
+     REAL(fp), POINTER :: OMOC_POA       (:,:)  ! OM:OC Ratio (OCFPOA) [unitless]
+     REAL(fp), POINTER :: OMOC_OPOA      (:,:)  ! OM:OC Ratio (OCFOPOA) [unitless]
+     REAL(fp), POINTER :: ACLArea      (:,:,:)  ! Fine Cl- Area [cm2/cm3]
+     REAL(fp), POINTER :: ACLRadi      (:,:,:)  ! Fine Cl- Radius [cm]
+     REAL(fp), POINTER :: QLxpHCloud   (:,:,:)  !
+     REAL(fp), POINTER :: SoilDust   (:,:,:,:)  ! Soil dust [kg/m3]
+     REAL(fp), POINTER :: ORVCsesq     (:,:,:)  ! Sesquiterpenes mass [kg/box]
 
      !-----------------------------------------------------------------------
      ! Fields for nitrogen deposition
@@ -186,7 +190,7 @@ MODULE State_Chm_Mod
                                                         !  reaction cofactors
 
      !-----------------------------------------------------------------------
-     ! For isoprene SOA via ISORROPIA
+     ! For isoprene SOA via ISORROPIA/HETP
      !-----------------------------------------------------------------------
      REAL(fp),          POINTER :: IsorropAeropH  (:,:,:,:) ! ISORROPIA aero pH
      REAL(fp),          POINTER :: IsorropHplus   (:,:,:,:) ! H+ conc [M]
@@ -329,8 +333,6 @@ MODULE State_Chm_Mod
      !-----------------------------------------------------------------------
      REAL(fp),          POINTER :: BOH        (:,:,:  ) ! OH values [molec/cm3]
      REAL(fp),          POINTER :: BCl        (:,:,:  ) ! Cl values [v/v]
-     REAL(fp),          POINTER :: CH4_EMIS   (:,:,:  ) ! CH4 emissions [kg/m2/s].
-                                                        ! third dim is cat, total 15
      LOGICAL                    :: IsCH4BCPerturbed     ! Is CH4 BC perturbed?
 
 #ifdef APM
@@ -341,6 +343,11 @@ MODULE State_Chm_Mod
 #endif
 
      !-----------------------------------------------------------------------
+     ! Fields for RRTMG
+     !-----------------------------------------------------------------------
+     REAL(fp),          POINTER :: TStrat_Adj (:,:,:  ) ! Accumulated strat adjustment
+
+     !-----------------------------------------------------------------------
      ! Registry of variables contained within State_Chm
      !-----------------------------------------------------------------------
      CHARACTER(LEN=4)           :: State     = 'CHEM'   ! Name of this state
@@ -348,7 +355,7 @@ MODULE State_Chm_Mod
      TYPE(dictionary_t)         :: RegDict              ! Registry lookup table
 
      !-----------------------------------------------------------------------
-     ! Carbon stuff for GEOS 
+     ! GEOS specific fields 
      !-----------------------------------------------------------------------
 #if defined( MODEL_GEOS )
      ! CO mesosphere boundary
@@ -468,6 +475,7 @@ CONTAINS
     ! Mapping vectors
     State_Chm%Map_Advect        => NULL()
     State_Chm%Map_Aero          => NULL()
+    State_Chm%Map_All           => NULL()
     State_Chm%Map_DryAlt        => NULL()
     State_Chm%Map_DryDep        => NULL()
     State_Chm%Map_GasSpc        => NULL()
@@ -488,7 +496,6 @@ CONTAINS
     ! Species-based quantities
     State_Chm%SpcData           => NULL()
     State_Chm%Species           => NULL()
-    State_Chm%Spc_Units         =  ''
     State_Chm%BoundaryCond      => NULL()
 
 #ifdef ADJOINT
@@ -505,6 +512,7 @@ CONTAINS
     State_Chm%RRTMG_iCld        = 0
 
     ! Aerosol and chemistry quantities
+    State_Chm%AerMass           => NULL()
     State_Chm%AeroArea          => NULL()
     State_Chm%AeroRadi          => NULL()
     State_Chm%WetAeroArea       => NULL()
@@ -537,7 +545,6 @@ CONTAINS
     State_Chm%TOMS2             => NULL()
     State_Chm%BOH               => NULL()
     State_Chm%BCl               => NULL()
-    State_Chm%CH4_EMIS          => NULL()
     State_Chm%SFC_CH4           => NULL()
 
     State_Chm%UCX_REGRID        => NULL()
@@ -598,6 +605,9 @@ CONTAINS
     State_Chm%SnowHgOceanStored => NULL()
     State_Chm%SnowHgLandStored  => NULL()
 
+    ! RRTMG quantities
+    State_Chm%TStrat_Adj        => NULL()
+
     ! Flags to toggle sulfate-mod computations or KPP computations
     ! TRUE  = use sulfate_mod
     ! FALSE = use KPP computations
@@ -635,6 +645,10 @@ CONTAINS
     ! Add fields for APM microphysics
     State_Chm%PSO4_SO2APM2      => NULL()
 #endif
+
+    ! KPP integrator quantities
+    State_Chm%KPP_AbsTol        => NULL()
+    State_Chm%KPP_RelTol        => NULL()
 
   END SUBROUTINE Zero_State_Chm
 !EOC
@@ -826,6 +840,16 @@ CONTAINS
     State_Chm%nTracer  = SpcCount%nTracer
     State_Chm%nWetDep  = SpcCount%nWetDep
 
+#if defined (TOMAS12)
+    State_Chm%nTomasBins = 12
+#elif defined(TOMAS15)
+    State_Chm%nTomasBins = 15
+#elif defined(TOMAS40)
+    State_Chm%nTomasBins = 40
+#else
+    State_Chm%nTomasBins = 30
+#endif
+
     ! Also get the number of the prod/loss species.  For fullchem simulations,
     ! the prod/loss species are listed in FAM_NAMES in gckpp_Monitor.F90,
     ! but for certain other simulations (tagO3, tagCO), advected species
@@ -926,8 +950,9 @@ CONTAINS
     ALLOCATE( State_Chm%Species( State_Chm%nSpecies ), STAT=RC )
     DO N = 1, State_Chm%nSpecies
 #if defined ( MODEL_GCHPCTM )
-       ! Species concentration array pointers will be set to point to MAPL internal state
-       ! every timestep when intstate level values are flipped to match GEOS-Chem standard
+       ! Species concentration array pointers will be set to point
+       ! to MAPL internal state every timestep when internal state level
+       ! values are flipped to match GEOS-Chem standard
        State_Chm%Species(N)%Conc => NULL()
 #else
        ALLOCATE( State_Chm%Species(N)%Conc( State_Grid%NX, &
@@ -935,6 +960,7 @@ CONTAINS
                                             State_Grid%NZ ), STAT=RC )
        State_Chm%Species(N)%Conc = 0.0_f8
 #endif
+       State_Chm%Species(N)%Units = 0
     ENDDO
 
 #ifdef ADJOINT
@@ -1006,6 +1032,18 @@ CONTAINS
        ! Save nAerosol to State_Chm
        State_Chm%nAeroType = nAerosol
 
+       !---------------------------------------------------------------------
+       ! Aerosol object
+       ! NOTE: content is currently not registered
+       !---------------------------------------------------------------------
+       ALLOCATE( State_Chm%AerMass, STAT=RC )
+       CALL Init_AerMass_Container( Input_Opt, State_Grid, State_Chm%AerMass, RC )
+       IF ( RC /= GC_SUCCESS ) THEN
+          errMsg = 'Error encountered in "Init_AerMass_Container" routine!'
+          CALL GC_Error( errMsg, RC, thisLoc )
+          RETURN
+       ENDIF
+       
        !---------------------------------------------------------------------
        ! AeroArea
        !---------------------------------------------------------------------
@@ -2242,24 +2280,7 @@ CONTAINS
     !=======================================================================
     ! Initialize State_Chm quantities pertinent to CH4 simulations
     !=======================================================================
-    IF ( Input_Opt%ITS_A_CH4_SIM .or. Input_Opt%ITS_A_TAGCH4_SIM ) THEN
-        ! CH4_EMIS
-        chmId = 'CH4_EMIS'
-        CALL Init_and_Register(                                              &
-            Input_Opt  = Input_Opt,                                          &
-            State_Chm  = State_Chm,                                          &
-            State_Grid = State_Grid,                                         &
-            chmId      = chmId,                                              &
-            Ptr2Data   = State_Chm%CH4_EMIS,                                 &
-            nSlots     = 16,                                                 &
-            RC         = RC                                                 )
-
-       IF ( RC /= GC_SUCCESS ) THEN
-          errMsg = TRIM( errMsg_ir ) // TRIM( chmId )
-          CALL GC_Error( errMsg, RC, thisLoc )
-          RETURN
-       ENDIF
-
+    IF ( Input_Opt%ITS_A_CH4_SIM ) THEN
        ! Global OH and Cl from HEMCO input
        chmId = 'BOH'
        CALL Init_and_Register(                                               &
@@ -2283,6 +2304,27 @@ CONTAINS
             State_Grid = State_Grid,                                         &
             chmId      = chmId,                                              &
             Ptr2Data   = State_Chm%BCl,                                      &
+            RC         = RC                                                 )
+
+       IF ( RC /= GC_SUCCESS ) THEN
+          errMsg = TRIM( errMsg_ir ) // TRIM( chmId )
+          CALL GC_Error( errMsg, RC, thisLoc )
+          RETURN
+       ENDIF
+    ENDIF
+
+    !=======================================================================
+    ! Initialize State_Chm quantities pertinent to RRTMG simulations
+    !=======================================================================
+    If (Input_Opt%LRAD) Then
+       ! %%% TStrat_Adj %%%
+       chmId = 'TStrat_Adj'
+       CALL Init_and_Register(                                               &
+            Input_Opt  = Input_Opt,                                          &
+            State_Chm  = State_Chm,                                          &
+            State_Grid = State_Grid,                                         &
+            chmId      = chmId,                                              &
+            Ptr2Data   = State_Chm%TStrat_Adj,                               &
             RC         = RC                                                 )
 
        IF ( RC /= GC_SUCCESS ) THEN
@@ -2444,6 +2486,13 @@ CONTAINS
        State_Chm%Map_Aero = 0
     ENDIF
 
+    IF ( State_Chm%nSpecies > 0 ) THEN
+       ALLOCATE( State_Chm%Map_All( State_Chm%nSpecies ), STAT=RC )
+       CALL GC_CheckVar( 'State_Chm%Map_All', 0, RC )
+       IF ( RC /= GC_SUCCESS ) RETURN
+       State_Chm%Map_All = 0
+    ENDIF
+
     IF (  State_Chm%nDryAlt > 0 ) THEN
        ALLOCATE( State_Chm%Map_DryAlt( State_Chm%nDryAlt ), STAT=RC )
        CALL GC_CheckVar( 'State_Chm%Map_DryAlt', 0, RC )
@@ -2482,6 +2531,17 @@ CONTAINS
        CALL GC_CheckVar( 'State_Chm%Map_KppVar', 0, RC )
        IF ( RC /= GC_SUCCESS ) RETURN
        State_Chm%Map_KppVar = 0
+
+       ! 
+       ALLOCATE( State_Chm%KPP_AbsTol( N ), STAT=RC )
+       CALL GC_CheckVar( 'State_Chm%KppAbsTol', 0, RC )
+       IF ( RC /= GC_SUCCESS ) RETURN
+       State_Chm%KPP_AbsTol = 0.0_f8
+
+       ALLOCATE( State_Chm%KPP_RelTol( N ), STAT=RC )
+       CALL GC_CheckVar( 'State_Chm%KppRelTol', 0, RC )
+       IF ( RC /= GC_SUCCESS ) RETURN
+       State_Chm%KPP_RelTol = 0.0_f8
     ENDIF
 
     N = State_Chm%nKppFix + State_Chm%nOmitted
@@ -2578,11 +2638,14 @@ CONTAINS
        ThisSpc => State_Chm%SpcData(N)%Info
 
        !---------------------------------------------------------------------
+       ! Set up the mapping for ALL SPECIES
+       !---------------------------------------------------------------------
+       State_Chm%Map_All(N) = ThisSpc%ModelID
+
+       !---------------------------------------------------------------------
        ! Set up the mapping for ADVECTED SPECIES
        !---------------------------------------------------------------------
        IF ( ThisSpc%Is_Advected ) THEN
-
-          ! Update the mapping vector of advected species
           C                       = ThisSpc%AdvectId
           State_Chm%Map_Advect(C) = ThisSpc%ModelId
        ENDIF
@@ -2637,6 +2700,8 @@ CONTAINS
        IF ( ThisSpc%Is_ActiveChem ) THEN
           C                       = ThisSpc%KppVarId
           State_Chm%Map_KppVar(C) = ThisSpc%ModelId
+          State_Chm%KPP_AbsTol(C) = ThisSpc%KPP_AbsTol
+          State_Chm%KPP_RelTol(C) = ThisSpc%KPP_RelTol
        ENDIF
 
        !---------------------------------------------------------------------
@@ -3037,9 +3102,23 @@ CONTAINS
     !=======================================================================
     ! Deallocate and nullify pointer fields of State_Chm
     !=======================================================================
-    IF ( ASSOCIATED ( State_Chm%Phot ) ) THEN
-       CALL Cleanup_Phot_Container(State_Chm%Phot, RC )
+    IF ( ASSOCIATED( State_Chm%Phot ) ) THEN
+       CALL Cleanup_Phot_Container( State_Chm%Phot, RC )
        State_Chm%Phot => NULL()
+    ENDIF
+
+    IF ( ASSOCIATED( State_Chm%KPP_AbsTol ) ) THEN
+       DEALLOCATE( State_Chm%KPP_AbsTol, STAT=RC )
+       CALL GC_CheckVar( 'State_Chm%KPP_AbsTol', 2, RC )
+       IF ( RC /= GC_SUCCESS ) RETURN
+       State_Chm%KPP_AbsTol => NULL()
+    ENDIF
+
+    IF ( ASSOCIATED( State_Chm%KPP_RelTol ) ) THEN
+       DEALLOCATE( State_Chm%KPP_RelTol, STAT=RC )
+       CALL GC_CheckVar( 'State_Chm%KPP_RelTol', 2, RC )
+       IF ( RC /= GC_SUCCESS ) RETURN
+       State_Chm%KPP_RelTol => NULL()
     ENDIF
 
     IF ( ASSOCIATED( State_Chm%Map_Advect ) ) THEN
@@ -3054,6 +3133,13 @@ CONTAINS
        CALL GC_CheckVar( 'State_Chm%Map_Aero', 2, RC )
        IF ( RC /= GC_SUCCESS ) RETURN
        State_Chm%Map_Aero => NULL()
+    ENDIF
+
+    IF ( ASSOCIATED( State_Chm%Map_All ) ) THEN
+       DEALLOCATE( State_Chm%Map_All, STAT=RC )
+       CALL GC_CheckVar( 'State_Chm%Map_All', 2, RC )
+       IF ( RC /= GC_SUCCESS ) RETURN
+       State_Chm%Map_All => NULL()
     ENDIF
 
     IF ( ASSOCIATED( State_Chm%Map_DryDep ) ) THEN
@@ -3182,6 +3268,12 @@ CONTAINS
        CALL GC_CheckVar( 'State_Chm%BoundaryCond', 2, RC )
        IF ( RC /= GC_SUCCESS ) RETURN
        State_Chm%BoundaryCond => NULL()
+    ENDIF
+
+    IF ( ASSOCIATED( State_Chm%AerMass ) ) THEN
+       CALL Cleanup_AerMass_Container(State_Chm%AerMass, RC )
+       DEALLOCATE( State_Chm%AerMass )
+       State_Chm%AerMass => NULL()
     ENDIF
 
     IF ( ASSOCIATED( State_Chm%AeroArea ) ) THEN
@@ -3598,13 +3690,6 @@ CONTAINS
        State_Chm%BCl => NULL()
     ENDIF
 
-    IF ( ASSOCIATED( State_Chm%CH4_EMIS ) ) THEN
-       DEALLOCATE( State_Chm%CH4_EMIS, STAT=RC )
-       CALL GC_CheckVar( 'State_Chm%CH4_EMIS', 2, RC )
-       IF ( RC /= GC_SUCCESS ) RETURN
-       State_Chm%CH4_EMIS => NULL()
-    ENDIF
-
 #ifdef LUO_WETDEP
     IF ( ASSOCIATED( State_Chm%QQ3D ) ) THEN
        DEALLOCATE( State_Chm%QQ3D, STAT=RC )
@@ -3792,6 +3877,13 @@ CONTAINS
       State_Chm%PSO4_SO2APM2 => NULL()
     ENDIF
 #endif
+
+    IF ( ASSOCIATED( State_Chm%TStrat_Adj ) ) THEN
+       DEALLOCATE( State_Chm%TStrat_Adj, STAT=RC )
+       CALL GC_CheckVar( 'State_Chm%TStrat_Adj', 2, RC )
+       IF ( RC /= GC_SUCCESS ) RETURN
+       State_Chm%KRATE => NULL()
+    ENDIF
 
     !-----------------------------------------------------------------------
     ! Template for deallocating more arrays, replace xxx with field name
@@ -4716,11 +4808,6 @@ CONTAINS
           IF ( isUnits ) Units = ''
           IF ( isRank  ) Rank  = 4
 
-       CASE( 'CH4_EMIS' )
-          IF ( isDesc  ) Desc  = 'CH4 emissions by sector, CH4 specialty simulation only'
-          IF ( isUnits ) Units = 'kg/m2/s'
-          IF ( isRank  ) Rank  = 3
-
        CASE( 'BOH' )
           IF ( isDesc  ) Desc  = 'OH values, CH4 specialty simulation only'
           IF ( isUnits ) Units = 'molec/cm3'
@@ -4762,6 +4849,11 @@ CONTAINS
           IF ( isUnits ) Units = 'mol mol-1'
           IF ( isRank  ) Rank  = 3
 #endif
+
+       CASE( 'TSTRAT_ADJ' )
+          IF ( isDesc  ) Desc  = 'Strat T adjustment'
+          IF ( isUnits ) Units = 'K'
+          IF ( isRank  ) Rank  = 3
 
        CASE DEFAULT
           Found = .False.

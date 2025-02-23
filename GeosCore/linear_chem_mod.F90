@@ -166,7 +166,8 @@ CONTAINS
     USE State_Grid_Mod,     ONLY : GrdState
     USE State_Met_Mod,      ONLY : MetState
     USE TIME_MOD,           ONLY : TIMESTAMP_STRING
-    USE UnitConv_Mod,       ONLY : Convert_Spc_Units
+    USE Timers_Mod,         ONLY : Timer_End, Timer_Start
+    USE UnitConv_Mod
 
     IMPLICIT NONE
 !
@@ -202,8 +203,8 @@ CONTAINS
     LOGICAL            :: IT_IS_A_TAGO3_SIM
 
     ! Scalars
-    INTEGER            :: I,     J,       L,   N
-    INTEGER            :: NN
+    INTEGER            :: previous_units
+    INTEGER            :: I,     J,       L,   N,   NN
     REAL(fp)           :: dt,    P,       k,   M0,  RC
     REAL(fp)           :: TK,    RDLOSS,  T1L, mOH, BryTmp
     REAL(fp)           :: BOXVL, Num,     Den, M
@@ -218,7 +219,6 @@ CONTAINS
 
     ! Strings
     CHARACTER(LEN=16)  :: STAMP
-    CHARACTER(LEN=63)  :: OrigUnit
     CHARACTER(LEN=255) :: ThisLoc
     CHARACTER(LEN=512) :: ErrMsg
 
@@ -258,7 +258,7 @@ CONTAINS
 #endif
 
     STAMP = TIMESTAMP_STRING()
-    IF ( Input_Opt%amIRoot ) THEN
+    IF ( Input_Opt%verbose ) THEN
        WRITE( 6, 10 ) STAMP
     ENDIF
 10  FORMAT( '     - DO_LINEAR_CHEM: Linearized chemistry at ', a )
@@ -600,15 +600,33 @@ CONTAINS
        !======================================================================
        IF ( LLINOZ .OR. LSYNOZ ) THEN
 
-          ! Convert units to [v/v dry air] for Linoz and Synoz (ewl, 10/05/15)
-          CALL Convert_Spc_Units( Input_Opt, State_Chm, State_Grid, State_Met, &
-                                  'v/v dry', errCode,   OrigUnit=OrigUnit )
+          ! Halt linear chem timer (so that unit conv can be timed separately)
+          IF ( Input_Opt%useTimers ) THEN
+             CALL Timer_End( "=> Linearized chem", errCode )
+          ENDIF
+
+          ! Convert units to [v/v dry air] aka [mol/mol dry] 
+          ! for Linoz and Synoz (ewl, 10/05/15)
+          CALL Convert_Spc_Units(                                            &
+               Input_Opt      = Input_Opt,                                   &
+               State_Chm      = State_Chm,                                   &
+               State_Grid     = State_Grid,                                  &
+               State_Met      = State_Met,                                   &
+               mapping        = State_Chm%Map_Advect,                        &
+               new_units      = MOLES_SPECIES_PER_MOLES_DRY_AIR,             &
+               previous_units = previous_units,                              &
+               RC             = errCode                                     )
 
           ! Trap potential errors
           IF ( errCode /= GC_SUCCESS ) THEN
              ErrMsg = 'Unit conversion error (forward) in "Convert_Spc_Units"!'
              CALL GC_Error( ErrMsg, errCode, ThisLoc )
              RETURN
+          ENDIF
+
+          ! Start linear chem timer again
+          IF ( Input_Opt%useTimers ) THEN
+             CALL Timer_Start( "=> Linearized chem", errCode )
           ENDIF
 
           ! Do LINOZ or SYNOZ
@@ -620,15 +638,31 @@ CONTAINS
                             State_Met, errCode )
           ENDIF
 
-         ! Convert species units back to original unit
-         CALL Convert_Spc_Units( Input_Opt, State_Chm, State_Grid, State_Met, &
-                                 OrigUnit,  errCode )
+          ! Halt linear chem timer (so that unit conv can be timed separately)
+          IF ( Input_Opt%useTimers ) THEN
+             CALL Timer_End( "=> Linearized chem", errCode )
+          ENDIF
+
+          ! Convert species units back to original unit
+          CALL Convert_Spc_Units(                                            &
+               Input_Opt  = Input_Opt,                                       &
+               State_Chm  = State_Chm,                                       &
+               State_Grid = State_Grid,                                      &
+               State_Met  = State_Met,                                       &
+               mapping    = State_Chm%Map_Advect,                            &
+               new_units  = previous_units,                                  &
+               RC         = errCode                                         )
 
           ! Trap potential errors
           IF ( errCode /= GC_SUCCESS ) THEN
              ErrMsg = 'Unit conversion error (backward) in "Convert_Spc_Units"!'
              CALL GC_Error( ErrMsg, errCode, ThisLoc )
              RETURN
+          ENDIF
+
+          ! Start linear chem timer again
+          IF ( Input_Opt%useTimers ) THEN
+             CALL Timer_Start( "=> Linearized chem", errCode )
           ENDIF
 
        ENDIF

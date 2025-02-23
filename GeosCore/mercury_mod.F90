@@ -226,7 +226,8 @@ CONTAINS
     USE State_Grid_Mod,       ONLY : GrdState
     USE State_Met_Mod,        ONLY : MetState
     USE Time_Mod,             ONLY : GET_MONTH, ITS_A_NEW_MONTH
-    USE UnitConv_Mod,         ONLY : Convert_Spc_Units
+    USE Timers_Mod,           ONLY : Timer_End, Timer_Start
+    USE UnitConv_Mod
     
     ! Added for GTMM (ccc, 11/19/09)
     !USE LAND_MERCURY_MOD,   ONLY : GTMM_DR
@@ -259,28 +260,39 @@ CONTAINS
 ! !LOCAL VARIABLES:
 !
     LOGICAL, SAVE      :: FIRST = .TRUE.
-    INTEGER            :: THISMONTH, I, J
+    INTEGER            :: THISMONTH, I, J, previous_units
     
     ! Pointers
     REAL(f4),  POINTER :: Ptr2D(:,:)
 
     ! Strings
-    CHARACTER(LEN=63)  :: OrigUnit
     CHARACTER(LEN=255) :: ErrMsg
     CHARACTER(LEN=255) :: ThisLoc
 
-    !=================================================================
+    !========================================================================
     ! EMISSMERCURY begins here!
-    !=================================================================
+    !========================================================================
 
     ! Assume success
     RC       = GC_SUCCESS
     ErrMsg   = ''
     ThisLoc  = ' -> at EMISSMERCURY (in module GeosCore/mercury_mod.F90)'
 
+    ! Halt HEMCO timer (so that unit conv can be timed separately)
+    IF ( Input_Opt%useTimers ) THEN
+       CALL Timer_End( "HEMCO", RC )
+    ENDIF
+
     ! Convert species units to [kg] for EMISSMERCURY (ewl, 8/12/15)
-    CALL Convert_Spc_Units( Input_Opt, State_Chm, State_Grid, State_Met, &
-                            'kg', RC, OrigUnit=OrigUnit )
+    CALL Convert_Spc_Units(                                                  &
+         Input_Opt      = Input_Opt,                                         &
+         State_Chm      = State_Chm,                                         &
+         State_Grid     = State_Grid,                                        &
+         State_Met      = State_Met,                                         &
+         mapping        = State_Chm%Map_Advect,                              &
+         new_units      = KG_SPECIES,                                        &
+         previous_units = previous_units,                                    &
+         RC             = RC                                                )
 
     ! Trap potential errors
     IF ( RC /= GC_SUCCESS ) THEN
@@ -289,9 +301,14 @@ CONTAINS
        RETURN
     ENDIF
 
-    !=================================================================
+    ! Start HEMCO timer again
+    IF ( Input_Opt%useTimers ) THEN
+       CALL Timer_Start( "HEMCO", RC )
+    ENDIF
+
+    !========================================================================
     ! Get data pointers from HEMCO on the first call
-    !=================================================================
+    !========================================================================
     IF ( FIRST ) THEN
 
        ! Soil distribution
@@ -358,17 +375,34 @@ CONTAINS
 
     ! Add Hg(0) source into State_Chm%Species [kg]
     CALL SRCHg0( Input_Opt,  State_Chm, State_Diag, State_Grid, State_Met, RC )
-   IF ( Input_Opt%Verbose ) THEN
-      CALL DEBUG_MSG( '### EMISSMERCURY: a SRCHg0' )
-   ENDIF
+    IF ( Input_Opt%Verbose ) THEN
+       CALL DEBUG_MSG( '### EMISSMERCURY: a SRCHg0' )
+    ENDIF
+
+    ! Halt HEMCO timer (so that unit conv can be timed separately)
+    IF ( Input_Opt%useTimers ) THEN
+       CALL Timer_End( "HEMCO", RC )
+    ENDIF
 
     ! Convert species units back to original unit
-    CALL Convert_Spc_Units( Input_Opt, State_Chm, State_Grid, State_Met, &
-                            OrigUnit,  RC )
+    CALL Convert_Spc_Units(                                                  &
+         Input_Opt  = Input_Opt,                                             &
+         State_Chm  = State_Chm,                                             &
+         State_Grid = State_Grid,                                            &
+         State_Met  = State_Met,                                             &
+         mapping    = State_Chm%Map_Advect,                                  &
+         new_units  = previous_units,                                        &
+         RC         = RC                                                    )
+
     IF ( RC /= GC_SUCCESS ) THEN
        CALL GC_Error('Unit conversion error', RC, &
                      'Routine EMISSMERCURY in mercury_mod.F90')
        RETURN
+    ENDIF
+
+    ! Start HEMCO timer again
+    IF ( Input_Opt%useTimers ) THEN
+       CALL Timer_Start( "HEMCO", RC )
     ENDIF
 
   END SUBROUTINE EMISSMERCURY
@@ -623,7 +657,6 @@ CONTAINS
     USE GcKpp_Model
     USE Gckpp_Global
     USE GcKpp_Rates,        ONLY : UPDATE_RCONST, RCONST
-    USE Timers_Mod
     USE Photolysis_Mod,     ONLY : Do_Photolysis
     USE PhysConstants,      ONLY : AVO
     USE State_Chm_Mod,      ONLY : Ind_
@@ -635,7 +668,7 @@ CONTAINS
     USE Time_Mod,           ONLY : Get_Year
     USE Time_Mod,           ONLY : ITS_A_NEW_MONTH, ITS_A_NEW_DAY
     USE Time_Mod,           ONLY : ITS_TIME_FOR_A3
-    USE UnitConv_Mod,       ONLY : Convert_Spc_Units
+    USE UnitConv_Mod
     USE ErrCode_Mod
     USE ERROR_MOD,          ONLY : ERROR_STOP, DEBUG_MSG, SAFE_DIV
     USE HCO_STATE_GC_MOD,   ONLY : HcoState
@@ -646,6 +679,8 @@ CONTAINS
     USE State_Diag_Mod,     ONLY : DgnState
     USE State_Grid_Mod,     ONLY : GrdState
     USE State_Met_Mod,      ONLY : MetState
+    USE Timers_Mod,         ONLY : Timer_End, Timer_Start
+
 !
 ! !INPUT PARAMETERS:
 !
@@ -672,19 +707,19 @@ CONTAINS
 
     ! Scalars
     LOGICAL                :: doSuppress
-    INTEGER                :: I,         J,         L,         K
-    INTEGER                :: N,         NN,        CN,        Hg_Cat
-    INTEGER                :: NA,        F,         SpcID,     KppID
-    INTEGER                :: P,         MONTH,     YEAR,      IRH
-    INTEGER                :: TotSteps,  TotFuncs,  TotJacob,  TotAccep
-    INTEGER                :: TotRejec,  TotNumLU,  HCRC,      IERR
-    INTEGER                :: Day,       S,         errorCount
-    REAL(fp)               :: REL_HUM,   rtim,      itim,      TOUT
-    REAL(fp)               :: T,         TIN
+    INTEGER                :: previous_units
+    INTEGER                :: I,          J,         L,          K
+    INTEGER                :: N,          NN,        CN,         Hg_Cat
+    INTEGER                :: NA,         F,         SpcID,      KppID
+    INTEGER                :: P,          MONTH,     YEAR,       IRH
+    INTEGER                :: TotSteps,   TotFuncs,  TotJacob,   TotAccep
+    INTEGER                :: TotRejec,   TotNumLU,  HCRC,       IERR
+    INTEGER                :: Day,        S,         errorCount
+    REAL(fp)               :: REL_HUM,    rtim,      itim,       TOUT
+    REAL(fp)               :: T,          TIN
 
     ! Strings
     CHARACTER(LEN=16)      :: thisName
-    CHARACTER(LEN=63)      :: origUnit
     CHARACTER(LEN=255)     :: errMsg
     CHARACTER(LEN=255)     :: thisLoc
 
@@ -856,12 +891,31 @@ CONTAINS
     !======================================================================
     ! Convert species to [molec/cm3] (ewl, 8/16/16)
     !======================================================================
-    CALL Convert_Spc_Units( Input_Opt, State_Chm, State_Grid, State_Met, &
-                            'molec/cm3', RC, OrigUnit=OrigUnit )
+
+    ! Halt gas-phase chem timer (so that unit conv can be timed separately)
+    IF ( Input_Opt%useTimers ) THEN
+       CALL Timer_End( "=> Gas-phase chem", RC )
+    ENDIF
+
+    ! Convert units
+    CALL Convert_Spc_Units(                                                  &
+         Input_Opt      = Input_Opt,                                         &
+         State_Chm      = State_Chm,                                         &
+         State_Grid     = State_Grid,                                        &
+         State_Met      = State_Met,                                         &
+         new_units      = MOLECULES_SPECIES_PER_CM3,                         &
+         previous_units = previous_units,                                    &
+         RC             = RC                                                )
+
     IF ( RC /= GC_SUCCESS ) THEN
        errMsg = 'Unit conversion error!'
        CALL GC_Error( errMsg, RC, 'mercury_mod.F90')
        RETURN
+    ENDIF
+
+    ! Start gas-phase chem timer again
+    IF ( Input_Opt%useTimers ) THEN
+       CALL Timer_Start( "=> Gas-phase chem", RC )
     ENDIF
 
     !========================================================================
@@ -915,10 +969,10 @@ CONTAINS
     !%%%%% CONVERGENCE CRITERIA %%%%%
 
     ! Absolute tolerance
-    ATOL      = 1e-2_dp
+    ATOL      = State_Chm%KPP_AbsTol
 
     ! Relative tolerance
-    RTOL      = 1e-2_dp
+    RTOL      = State_Chm%KPP_RelTol
 
     !%%%%% SOLVER OPTIONS %%%%%
 
@@ -1366,14 +1420,31 @@ CONTAINS
     !========================================================================
     ! Convert species back to original units (ewl, 8/16/16)
     !========================================================================
-    CALL Convert_Spc_Units( Input_Opt, State_Chm, State_Grid,                &
-                            State_Met, OrigUnit,  RC                        )
+
+    ! Halt gas-phase chem timer (so that unit conv can be timed separately)
+    IF ( Input_Opt%useTimers ) THEN
+       CALL Timer_End( "=> Gas-phase chem", RC )
+    ENDIF
+
+    ! Convert units back
+    CALL Convert_Spc_Units(                                                  &
+         Input_Opt  = Input_Opt,                                             &
+         State_Chm  = State_Chm,                                             &
+         State_Grid = State_Grid,                                            &
+         State_Met  = State_Met,                                             &
+         new_units  = previous_units,                                        &
+         RC         = RC                                                    )
 
     ! Trap potential errors
     IF ( RC /= GC_SUCCESS ) THEN
        errMsg = 'Unit conversion error!'
        CALL GC_Error( errMsg, RC, 'mercury_mod.F90' )
        RETURN
+    ENDIF
+
+    ! Start gas-phase chem timer again
+    IF ( Input_Opt%useTimers ) THEN
+       CALL Timer_Start( "=> Gas-phase chem", RC )
     ENDIF
 
     !### Debug output (uncomment if needed)
@@ -3563,7 +3634,7 @@ CONTAINS
     !========================================================================
     IF ( nFam > 0 ) THEN
 
-        ! Allocate mapping array for KPP Ids for ND65 bpch diagnostic
+        ! Allocate mapping array for KPP Ids for prod/loss diagnostic
         ALLOCATE( PL_Kpp_Id( nFam ), STAT=RC )
         CALL GC_CheckVar( 'mercury_mod.F90:PL_Kpp_Id', 0, RC )
         IF ( RC /= GC_SUCCESS ) RETURN
@@ -3815,6 +3886,18 @@ CONTAINS
        ENDIF
     ENDDO
 
+    !=======================================================================
+    ! Assign default values for KPP absolute and relative tolerances
+    ! for species where these have not been explicitly defined.
+    !=======================================================================
+    WHERE( State_Chm%KPP_AbsTol == MISSING_DBLE )
+       State_Chm%KPP_AbsTol = 1.0e-2_f8
+    ENDWHERE
+
+    WHERE( State_Chm%KPP_RelTol == MISSING_DBLE )
+       State_Chm%KPP_RelTol = 1.0e-2_f8
+    ENDWHERE
+
     !========================================================================
     ! Various Settings (not sure how many of these still work)
     !========================================================================
@@ -3872,7 +3955,7 @@ CONTAINS
     !========================================================================
     ! Initialize photolysis
     !========================================================================
-    CALL Init_Photolysis( Input_Opt, State_Chm, State_Diag, RC )
+    CALL Init_Photolysis( Input_Opt, State_Grid, State_Chm, State_Diag, RC )
     IF ( RC /= GC_SUCCESS ) THEN
        errMsg = 'Error encountered in "Init_Photolysis"!'
        CALL GC_Error( errMsg, RC, thisLoc )

@@ -32,9 +32,43 @@ operations:
       activate: true
       use_static_bnd_cond: true
     gamma_HO2: 0.2
+    autoreduce_solver:
+      activate: false
+      use_target_threshold:
+        activate: true
+        oh_tuning_factor: 0.00005
+        no2_tuning_factor: 0.0001
+      use_absolute_threshold:
+        scale_by_pressure: true
+        absolute_threshold: 100.0
+      keep_halogens_active: false
+      append_in_internal_timestep: false
 
-  convection:
-    activate: false
+  photolysis:
+    activate: true
+    cloud-j:
+      num_levs_with_cloud: 22
+      cloud_scheme_flag: 3
+      opt_depth_increase_factor: 1.050
+      min_top_inserted_cloud_OD: 0.005
+      cloud_overlap_correlation: 0.33
+      num_cloud_overlap_blocks: 6
+      sphere_correction: 1
+      num_wavelength_bins: 18
+      use_H2O_UV_absorption: true
+    input_directories:
+      fastjx_input_dir: /see/namelist/file
+      cloudj_input_dir: /see/namelist/file
+    overhead_O3:
+      use_online_O3_from_model: true
+      use_column_O3_from_met: true
+      use_TOMS_SBUV_O3: false
+    photolyze_nitrate_aerosol:
+      activate: true
+      NITs_Jscale: 100.0
+      NIT_Jscale: 100.0
+      percent_channel_A_HONO: 66.667
+      percent_channel_B_NO2: 33.333
 
   dry_deposition:
     activate: true
@@ -44,22 +78,15 @@ operations:
       reference_CO2_level: 380.0
     diag_alt_above_sfc_in_m: 10
 
+  wet_deposition:
+    activate: true
+
   pbl_mixing:
      activate: true
      use_non_local_pbl: true
 
-  photolysis:
-    input_dir: {DATA_ROOT}/CHEM_INPUTS/FAST_JX/v2020-10/
-    overhead_O3:
-      use_online_O3_from_model: true
-      use_column_O3_from_met: true
-      use_TOMS_SBUV_O3: false
-    photolyze_nitrate_aerosol:
-      activate: true
-      NITs_Jscale_JHNO3: 100.0
-      NIT_Jscale_JHNO2: 100.0
-      percent_channel_A_HONO: 66.667
-      percent_channel_B_NO2: 33.333
+  convection:
+    activate: false
 
   rrtmg_rad_transfer_model:
     activate: false
@@ -71,13 +98,24 @@ operations:
     all_sky_flux: false
 
   transport:
-    activate: true
     transported_species:
       - ACET
+      - ACR
       - ACTA
       - AERI
       - ALD2
       - ALK4
+      - ALK4N2
+      - ALK4P
+      - ALK6
+      - AONITA
+      - APAN
+      - APINN
+      - APINP
+      - AROMCHO
+      - AROMP4
+      - AROMP5
+      - AROMPN
       - ASOA1
       - ASOA2
       - ASOA3
@@ -85,15 +123,17 @@ operations:
       - ASOG1
       - ASOG2
       - ASOG3
-      - AONITA
-      - AROMP4
-      - AROMP5
       - ATOOH
       - BALD
       - BCPI
       - BCPO
       - BENZ
       - BENZP
+      - BPINN
+      - BPINO
+      - BPINON
+      - BPINOOH
+      - BPINP
       - Br
       - Br2
       - BrCl
@@ -102,12 +142,17 @@ operations:
       - BrO
       - BrSALA
       - BrSALC
+      - BUTDI
+      - BUTN
       - BZCO3H
       - BZPAN
       - C2H2
       - C2H4
       - C2H6
       - C3H8
+      - C4H6
+      - C96N
+      - C96O2H
       - CCl4
       - CFC11
       - CFC113
@@ -142,12 +187,14 @@ operations:
       - DST2
       - DST3
       - DST4
+      - EBZ
       - EOH
       - ETHLN
       - ETHN
       - ETHP
       - ETNO3
       - ETP
+      - FURA
       - GLYC
       - GLYX
       - H1211
@@ -156,6 +203,7 @@ operations:
       - H2O
       - H2O2
       - HAC
+      - HACTA
       - HBr
       - HC5A
       - HCFC123
@@ -216,7 +264,15 @@ operations:
       - ISOP
       - ITCN
       - ITHN
+      - LIMAL
+      - LIMKB
+      - LIMKET
+      - LIMN
+      - LIMNB
       - LIMO
+      - LIMO2H
+      - LIMO3H
+      - LIMPAN
       - LVOC
       - LVOCOA
       - MACR
@@ -229,6 +285,7 @@ operations:
       - MCRHP
       - MCT
       - MEK
+      - MEKPN
       - MENO3
       - MGLY
       - MOH
@@ -248,6 +305,7 @@ operations:
       - MVKHP
       - MVKN
       - MVKPC
+      - MYRCO
       - N2O
       - N2O5
       - NH3
@@ -267,7 +325,13 @@ operations:
       - OIO
       - PAN
       - pFe
+      - PHAN
       - PHEN
+      - PIN
+      - PINAL
+      - PINO3H
+      - PINONIC
+      - PINPAN
       - PIP
       - PP
       - PPN
@@ -277,13 +341,17 @@ operations:
       - PYAC
       - R4N2
       - R4P
+      - R7N2
+      - R7P
       - RA3P
       - RB3P
       - RCHO
+      - RCOOH
       - RIPA
       - RIPB
       - RIPC
       - RIPD
+      - RNO3
       - RP
       - SALA
       - SALAAL
@@ -296,6 +364,9 @@ operations:
       - SO4s
       - SOAGX
       - SOAIE
+      - STYR
+      - TLFUONE
+      - TMB
       - TOLU
       - TSOA0
       - TSOA1
@@ -307,13 +378,13 @@ operations:
       - TSOG3
       - XYLE
 
-  wet_deposition:
-    activate: true
-
 #============================================================================
 # Settings for GEOS-Chem aerosols
 #============================================================================
 aerosols:
+
+  optics:
+    input_dir: /see/namelist/file
 
   carbon:
     activate: true

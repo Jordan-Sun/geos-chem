@@ -29,9 +29,8 @@ MODULE PHOTOLYSIS_MOD
 !
 ! !PRIVATE MEMBER FUNCTIONS:
 !
-  PRIVATE :: RD_AOD
-  PRIVATE :: CALC_AOD
   PRIVATE :: SET_AER
+  PRIVATE :: RD_PROF_NC
 !
 ! !REVISION HISTORY:
 !  20 Mar 2023 - E. Lundgren - initial version, adapted from fast_jx_mod.F90
@@ -41,7 +40,6 @@ MODULE PHOTOLYSIS_MOD
 !BOC
    ! Species ID flags
    INTEGER :: id_NIT, id_NITs, id_SALA, id_SALC
-
 
 CONTAINS
 !EOC
@@ -57,22 +55,32 @@ CONTAINS
 !\\
 ! !INTERFACE:
 !
-  SUBROUTINE INIT_PHOTOLYSIS( Input_Opt, State_Chm, State_Diag, RC )
+  SUBROUTINE INIT_PHOTOLYSIS( Input_Opt, State_Grid, State_Chm, State_Diag, RC )
 !
 ! !USES:
 !
     USE Charpak_Mod,    ONLY : CSTRIP
+#ifdef FASTJX
     USE CMN_FJX_Mod,    ONLY : JVN_, W_, JLABEL, RNAMES, WL, JFACTA
+#else
+    USE Cldj_Cmn_Mod,   ONLY : JVN_, W_, JLABEL, RNAMES, WL, JFACTA
+#endif
     USE ErrCode_Mod
     USE Input_Opt_Mod,  ONLY : OptInput
     USE PhysConstants,  ONLY : Planck, CConst
     USE State_Chm_Mod,  ONLY : ChmState, Ind_
     USE State_Diag_Mod, ONLY : DgnState
+    USE State_Grid_Mod, ONLY : GrdState
+#ifdef FASTJX
     USE Fjx_Interface_Mod,  ONLY : Init_FastJX
+#else
+    USE Cldj_Interface_Mod, ONLY : Init_CloudJ
+#endif
 !
 ! !INPUT PARAMETERS:
 !
     TYPE(OptInput), INTENT(IN)    :: Input_Opt   ! Input Options object
+    TYPE(GrdState), INTENT(IN)    :: State_Grid  ! Grid State object
     TYPE(DgnState), INTENT(IN)    :: State_Diag  ! Diagnostics State object
 !
 ! !INPUT/OUTPUT PARAMETERS:
@@ -124,6 +132,7 @@ CONTAINS
     ! a list of all of the lookup tables etc read by Fast-JX
     !--------------------------------------------------------------------
     IF ( Input_Opt%Do_Photolysis ) THEN
+#ifdef FASTJX
        IF ( TRIM(Input_Opt%Fast_JX_Dir) == MISSING_STR ) THEN
           ErrMsg = 'Init_Photolysis: Fast-JX directory missing in ' // &
                    'in geoschem_config.yml!'
@@ -136,36 +145,46 @@ CONTAINS
           CALL GC_Error( ErrMsg, RC, ThisLoc )
           RETURN
        ENDIF
-    ENDIF
+#else
+       IF ( TRIM(Input_Opt%CloudJ_Dir) == MISSING_STR ) THEN
+          ErrMsg = 'Init_Photolysis: Cloud-J directory missing in ' // &
+                   'geoschem_config.yml!'
+          CALL GC_Error( ErrMsg, RC, ThisLoc )
+          RETURN
+       ENDIF
+       CALL Init_CloudJ( Input_Opt, State_Grid, State_Diag, State_Chm, RC )
+       IF ( RC /= GC_SUCCESS ) THEN
+          ErrMsg = 'Error encountered in "Init_CloudJ"!'
+          CALL GC_Error( ErrMsg, RC, ThisLoc )
+          RETURN
+       ENDIF
+#endif
 
-    !------------------------------------------------------------------------
-    ! Read in AOD data even if photolysis disabled
-    ! (or just print file name if in dry-run mode)
-    !------------------------------------------------------------------------
-    CALL RD_AOD( Input_Opt, State_Chm, RC )
+    ENDIF
+    
+    !--------------------------------------------------------------------
+    ! Read in T & O3 climatology to fill e.g. upper layers or if O3 not calc.
+    !--------------------------------------------------------------------
+    ! NOTE: Cloud-J reads in an ascii file with this data during initialization
+    ! and uses it prior to calling Cloud_JX within the Cloud-J standalone. In
+    ! GEOS-Chem we read a netcdf file instead and use the data within
+    ! subroutine Set_Prof_Fjx if using Fast-JX and Set_Prof_CloudJ if using
+    ! Cloud-J. The data is stored in State_Chm%Phot%TREF/%OREF. Cloud-J
+    ! globals variables TREF and OREF are only used for Cloud-J standalone.
+    CALL RD_PROF_NC( Input_Opt, State_Grid, State_Chm, RC )
     IF ( RC /= GC_SUCCESS ) THEN
-       ErrMsg = 'Error encountered in FAST-JX routine "RD_AOD"!'
+       ErrMsg = 'Error encountered in routine "Rd_Prof_Nc"!'
        CALL GC_Error( ErrMsg, RC, ThisLoc )
        RETURN
     ENDIF
 
     !------------------------------------------------------------------------
     ! Exit without doing any computations if we are doing a dry-run
-    !------------------------------------------------------------------------
-    IF ( Input_Opt%DryRun ) RETURN
-
-    !------------------------------------------------------------------------
-    ! Compute the required wavelengths in the LUT to calculate requested AOD
-    !------------------------------------------------------------------------
-    IF (Input_Opt%amIRoot) WRITE(6,*) 'Wavelength optics read successfully'
-    CALL CALC_AOD( Input_Opt, State_Chm, RC )
-
-    !------------------------------------------------------------------------
     ! Exit if photolysis disabled (zero J-values)
     !------------------------------------------------------------------------
-    IF ( .NOT. Input_Opt%Do_Photolysis ) RETURN
+    IF ( Input_Opt%DryRun .OR. .NOT. Input_Opt%Do_Photolysis ) RETURN
 
-    !------------------------------------------------------------------------
+    !--------------------------------------------------------------------
     ! Set up MIEDX array to interpret between GC and FJX aerosol indexing
     !------------------------------------------------------------------------
     CALL SET_AER( Input_Opt, State_Chm, RC )
@@ -505,7 +524,11 @@ CONTAINS
     USE State_Diag_Mod,     ONLY : DgnState
     USE State_Grid_Mod,     ONLY : GrdState
     USE State_Met_Mod,      ONLY : MetState
+#ifdef FASTJX
     USE Fjx_Interface_Mod,  ONLY : Run_FastJX
+#else
+    USE Cldj_Interface_Mod, ONLY : Run_CloudJ
+#endif
 
     IMPLICIT NONE
 !
@@ -549,9 +572,19 @@ CONTAINS
     ThisLoc  = ' -> at DO_PHOTOLYSIS (in module GeosCore/photolysis_mod.F90)'
     WAVELENGTH = 0
 
+#ifdef FASTJX
     CALL Run_FastJX( Wavelength, Input_Opt,  State_Chm, State_Diag, &
                      State_Grid, State_Met, RC )
+#else
+    CALL Run_CloudJ( Input_Opt, State_Chm, State_Diag, State_Grid, State_Met, RC )
+#endif
+
     IF ( RC /= GC_SUCCESS ) THEN
+#ifdef FASTJX
+       ErrMsg = 'Error encountered in subroutine Run_FastJX!'
+#else
+       ErrMsg = 'Error encountered in subroutine Run_CloudJ!'
+#endif
        CALL GC_Error( ErrMsg, RC, ThisLoc )
        RETURN
     ENDIF
@@ -601,8 +634,7 @@ CONTAINS
 !
 ! !REMARKS:
 !  NOTE: The netCDF diagnostics are attached in DO_FLEXCHEM so that we have
-!  access to the adjusted rates.  Only the bpch diagnostics are updated
-!  here.
+!  access to the adjusted rates.
 !    -- Bob Yantosca, 19 Dec 2017
 !
 !  %%%% NOTE: WE SHOULD UPDATE THE COMMENTS TO MAKE SURE THAT WE DO      %%%%
@@ -743,566 +775,6 @@ CONTAINS
 !------------------------------------------------------------------------------
 !BOP
 !
-! !IROUTINE: rd_aod
-!
-! !DESCRIPTION: Subroutine RD\_AOD reads aerosol phase functions that are
-!  used to scale diagnostic output to an arbitrary wavelengh.  This
-!  facilitates comparing with satellite observations.
-!\\
-!\\
-! !INTERFACE:
-!
-  SUBROUTINE RD_AOD( Input_Opt, State_Chm, RC )
-!
-! !USES:
-!
-    USE ErrCode_Mod
-    USE Input_Opt_Mod, ONLY : OptInput
-    USE InquireMod,    ONLY : FindFreeLUN
-    USE State_Chm_Mod, ONLY : ChmState
-#if defined( MODEL_CESM )
-    USE UNITS,         ONLY : freeUnit
-#endif
-!
-! !INPUT PARAMETERS:
-!
-    TYPE(OptInput),   INTENT(IN)    :: Input_Opt   ! Input Options object
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-    TYPE(ChmState),   INTENT(INOUT) :: State_Chm   ! Chemistry State object
-!
-! !OUTPUT PARAMETERS:
-!
-    INTEGER,          INTENT(OUT)   :: RC          ! Success or failure?
-!
-! !REMARKS:
-!  The .dat files for each species contain the optical properties
-!  at multiple wavelengths to be used in the online calculation of the aerosol
-!  optical depth diagnostics.
-!  These properties have been calculated using the same size and optical
-!  properties as the FJX_spec.dat file used for the FAST-J photolysis
-!  calculations (which is now redundant for aerosols, the values in the .dat
-!  files here are now used). The file currently contains 11 wavelengths
-!  for Fast-J and other commonly used wavelengths for satellite and
-!  AERONET retrievals. 30 wavelengths follow that map onto RRTMG
-!  wavebands for radiaitive flux calculations (not used if RRTMG is off).
-!  A complete set of optical properties from 250-2000 nm for aerosols is
-!  available at:
-!  ftp://ftp.as.harvard.edu/geos-chem/data/aerosol_optics/hi_spectral_res
-!                                                                             .
-!     -- Colette L. Heald, 05/10/10)
-!     -- David A. Ridley, 05/10/13 (update for new optics files)
-!
-! !REVISION HISTORY:
-!  10 May 2010 - C. Heald      - Initial version
-!  See https://github.com/geoschem/geos-chem for complete history
-!EOP
-!------------------------------------------------------------------------------
-!BOC
-!
-! !LOCAL VARIABLES
-!
-    ! Scalars
-    INTEGER            :: I, J, K, N
-    INTEGER            :: IOS, NJ1
-    LOGICAL            :: LBRC, FileExists
-
-    ! Strings
-    CHARACTER(LEN=78 ) :: TITLE0
-    CHARACTER(LEN=255) :: DATA_DIR
-    CHARACTER(LEN=255) :: THISFILE
-    CHARACTER(LEN=255) :: FileMsg
-    CHARACTER(LEN=255) :: ErrMsg
-    CHARACTER(LEN=255) :: ThisLoc
-
-    ! String arrays
-    CHARACTER(LEN=30)  :: SPECFIL(8)
-
-    ! Pointers
-    REAL*8, POINTER :: WVAA  (:,:)    
-    REAL*8, POINTER :: RHAA  (:,:)    
-    REAL*8, POINTER :: RDAA  (:,:)    
-    REAL*8, POINTER :: RWAA  (:,:)    
-    REAL*8, POINTER :: SGAA  (:,:)    
-    REAL*8, POINTER :: REAA  (:,:)    
-    REAL*8, POINTER :: NCMAA (:,:,:)  
-    REAL*8, POINTER :: NRLAA (:,:,:)  
-    REAL*8, POINTER :: QQAA  (:,:,:)  
-    REAL*8, POINTER :: ALPHAA(:,:,:)  
-    REAL*8, POINTER :: SSAA  (:,:,:)  
-    REAL*8, POINTER :: ASYMAA(:,:,:)  
-    REAL*8, POINTER :: PHAA  (:,:,:,:)
-
-    !================================================================
-    ! RD_AOD begins here!
-    !================================================================
-
-    ! Initialize
-    RC       = GC_SUCCESS
-    ErrMsg   = ''
-    ThisLoc  = ' -> at RD_AOD (in module GeosCore/fast_jx_mod.F90)'
-    LBRC     = Input_Opt%LBRC
-    DATA_DIR = TRIM( Input_Opt%FAST_JX_DIR )
-
-    ! Set Pointers
-    WVAA   => State_Chm%Phot%WVAA
-    RHAA   => State_Chm%Phot%RHAA
-    RDAA   => State_Chm%Phot%RDAA
-    RWAA   => State_Chm%Phot%RWAA
-    SGAA   => State_Chm%Phot%SGAA
-    REAA   => State_Chm%Phot%REAA
-    NRLAA  => State_Chm%Phot%NRLAA
-    NCMAA  => State_Chm%Phot%NCMAA
-    QQAA   => State_Chm%Phot%QQAA
-    ALPHAA => State_Chm%Phot%ALPHAA
-    SSAA   => State_Chm%Phot%SSAA
-    ASYMAA => State_Chm%Phot%ASYMAA
-    PHAA   => State_Chm%Phot%PHAA
-
-#if defined( MODEL_CESM )
-    IF ( Input_Opt%amIRoot ) THEN
-       NJ1 = findFreeLUN()
-    ELSE
-       NJ1 = 0
-    ENDIF
-#else
-    ! Get a free LUN
-    NJ1 = findFreeLUN()
-#endif
-
-    ! IMPORTANT: aerosol_mod.F and dust_mod.F expect aerosols in this order
-    !
-    ! Treating strat sulfate with GADS data but modified to match
-    ! the old Fast-J values size (r=0.09um, sg=0.6) - I think there's
-    ! evidence that this is too smale and narrow e.g. Deshler et al. 2003
-    ! NAT should really be associated with something like cirrus cloud
-    ! but for now we are just treating the NAT like the sulfate... limited
-    ! info but ref index is similar e.g. Scarchilli et al. (2005)
-    !(DAR 05/2015)
-    DATA SPECFIL /"so4.dat","soot.dat","org.dat", &
-                  "ssa.dat","ssc.dat",            &
-                  "h2so4.dat","h2so4.dat",        &
-                  "dust.dat"/
-
-    ! Loop over the array of filenames
-    DO k = 1, State_Chm%Phot%NSPAA
-
-       ! Choose different set of input files for standard (trop+strat chenm)
-       ! and tropchem (trop-only chem) simulations
-       THISFILE = TRIM( DATA_DIR ) // TRIM( SPECFIL(k) )
-
-       !--------------------------------------------------------------
-       ! In dry-run mode, print file path to dryrun log and cycle.
-       ! Otherwise, print file path to stdout and continue.
-       !--------------------------------------------------------------
-
-       ! Test if the file exists
-       INQUIRE( FILE=TRIM( ThisFile ), EXIST=FileExists )
-
-       ! Test if the file exists and define an output string
-       IF ( FileExists ) THEN
-          FileMsg = 'FAST-JX (RD_AOD): Opening'
-       ELSE
-          FileMsg = 'FAST-JX (RD_AOD): REQUIRED FILE NOT FOUND'
-       ENDIF
-
-       ! Write to stdout for both regular and dry-run simulations
-       IF ( Input_Opt%amIRoot ) THEN
-          WRITE( 6, 300 ) TRIM( FileMsg ), TRIM( ThisFile )
-300       FORMAT( a, ' ', a )
-       ENDIF
-
-       ! For dry-run simulations, cycle to next file.
-       ! For regular simulations, throw an error if we can't find the file.
-       IF ( Input_Opt%DryRun ) THEN
-          CYCLE
-       ELSE
-          IF ( .not. FileExists ) THEN
-             WRITE( ErrMsg, 300 ) TRIM( FileMsg ), TRIM( ThisFile )
-             CALL GC_Error( ErrMsg, RC, ThisLoc )
-             RETURN
-          ENDIF
-       ENDIF
-
-       !--------------------------------------------------------------
-       ! If not a dry-run, read data from each species file
-       !--------------------------------------------------------------
-
-#if defined( MODEL_CESM )
-       ! Only read file on root thread if using CESM
-       IF ( Input_Opt%amIRoot ) THEN
-#endif
-
-       ! Open file
-       OPEN( NJ1, FILE=TRIM( THISFILE ), STATUS='OLD', IOSTAT=RC )
-
-       ! Error check
-       IF ( RC /= 0 ) THEN
-          ErrMsg = 'Error opening file: ' // TRIM( ThisFile )
-          CALL GC_Error( ErrMsg, RC, ThisLoc )
-          RETURN
-       ENDIF
-
-       ! Read header lines
-       READ(  NJ1, '(A)' ) TITLE0
-       IF ( Input_Opt%amIRoot ) WRITE( 6, '(1X,A)' ) TITLE0
-
-       ! Second header line added for more info
-       READ(  NJ1, '(A)' ) TITLE0
-       IF ( Input_Opt%amIRoot ) WRITE( 6, '(1X,A)' ) TITLE0
-
-       READ(  NJ1, '(A)' ) TITLE0
-110    FORMAT( 3x, a20 )
-
-       DO i = 1, State_Chm%Phot%NRAA
-       DO j = 1, State_Chm%Phot%NWVAA
-
-          READ(NJ1,*) WVAA(j,k),RHAA(i,k),NRLAA(j,i,k),NCMAA(j,i,k), &
-                      RDAA(i,k),RWAA(i,k),SGAA(i,k),QQAA(j,i,k),   &
-                      ALPHAA(j,i,k),REAA(i,k),SSAA(j,i,k),         &
-                      ASYMAA(j,i,k),(PHAA(j,i,k,n),n=1,8)
-
-          ! make note of where 1000nm is for FAST-J calcs
-          IF (WVAA(j,k).EQ.1000.0) State_Chm%Phot%IWV1000=J
-
-       ENDDO
-       ENDDO
-
-       ! Close file
-       CLOSE( NJ1 )
-
-#if defined( MODEL_CESM )
-       ENDIF
-#endif
-
-    ENDDO
-    
-#if defined( MODEL_CESM )
-    IF ( Input_Opt%amIRoot ) CALL freeUnit(NJ1)
-#endif
-
-  ! Free pointers
-    WVAA   => NULL()
-    RHAA   => NULL()
-    RDAA   => NULL()
-    RWAA   => NULL()
-    SGAA   => NULL()
-    REAA   => NULL()
-    NCMAA  => NULL()
-    NRLAA  => NULL()
-    QQAA   => NULL()
-    ALPHAA => NULL()
-    SSAA   => NULL()
-    ASYMAA => NULL()
-    PHAA   => NULL()
-
-  END SUBROUTINE RD_AOD
-!EOC
-!------------------------------------------------------------------------------
-!                  GEOS-Chem Global Chemical Transport Model                  !
-!------------------------------------------------------------------------------
-!BOP
-!
-! !IROUTINE: calc_aod
-!
-! !DESCRIPTION: Subroutine CALC\_AOD works out the closest tie points
-! in the optics LUT wavelengths and the coefficients required to
-! calculate the angstrom exponent for interpolating optics to the requested
-! wavelength. If the wavelength requested matches a standard wavelength
-! in the LUT then we skip the interpolation (DAR 09/2013)
-!\\
-!\\
-! !INTERFACE:
-!
-  SUBROUTINE CALC_AOD( Input_Opt, State_Chm, RC )
-!
-! !USES:
-!
-    USE Input_Opt_Mod, ONLY : OptInput
-#ifdef RRTMG
-    USE PARRRTM,       ONLY : NBNDLW
-#endif
-    USE State_Chm_Mod, ONLY : ChmState
-!
-! !INPUT PARAMETERS:
-!
-    TYPE(OptInput), INTENT(IN)    :: Input_Opt
-!
-! !INPUT/OUTPUT PARAMETERS:
-!
-    TYPE(ChmState), INTENT(INOUT) :: State_Chm
-!
-! !OUTPUT PARAMETERS:
-!
-    INTEGER,        INTENT(IN)    :: RC
-!
-! !REMARKS:
-!  Now the user is able to select any 3 wavelengths for optics
-!  output in the geoschem_config.yml file we need to be able to interpolate
-!  to those wavelengths based on what is available in the optics
-!  look-up table.
-!                                                                             .
-!  The standard lookup table currently has values for
-!  11 common wavelengths followed by 30 that are required by RRTMG.
-!  Only those required to interpolate to user requested
-!  wavelengths are selected from the standard wavelengths. RRTMG
-!  wavelengths are not used in the interpolation for AOD output
-!  (DAR 10/2013)
-!                                                                             .
-!   UPDATE: because the RT optics output doesnt have access to the
-!   standard wavelengths we now calculate two sets of values: one
-!   for the ND21 and diag3 outputs that use the standard wavelengths
-!   and one for RRTMG diagnostics that interpolate the optics from RRTMG
-!   wavelengths. Perhaps a switch needs adding to switch off the RT
-!   optics output (and interpolation) if this ends up costing too
-!   much and is not used, but it is ideal to have an optics output
-!   that matches exactly what RRTMG uses to calculate the fluxes
-!
-! !REVISION HISTORY:
-!  18 Jun 2013 - D. Ridley   - Initial version
-!  See https://github.com/geoschem/geos-chem for complete history
-!EOP
-!------------------------------------------------------------------------------
-!BOC
-!
-! !LOCAL VARIABLES
-!
-    INTEGER             :: MINWV, MAXWV, N, N0, N1, W, NSTEP
-    INTEGER             :: NWVAA, NWVAA0, NWVREQUIRED, NRTWVREQUIRED
-    REAL(fp)            :: WVDIF
-
-    ! Pointers
-    INTEGER, POINTER :: IWVREQUIRED  (:)    
-    INTEGER, POINTER :: IRTWVREQUIRED(:)
-    INTEGER, POINTER :: IWVSELECT    (:,:)
-    INTEGER, POINTER :: IRTWVSELECT  (:,:)
-    REAL*8,  POINTER :: ACOEF_WV     (:)
-    REAL*8,  POINTER :: BCOEF_WV     (:)
-    REAL*8,  POINTER :: CCOEF_WV     (:)
-    REAL*8,  POINTER :: ACOEF_RTWV   (:)
-    REAL*8,  POINTER :: BCOEF_RTWV   (:)
-    REAL*8,  POINTER :: CCOEF_RTWV   (:)
-    REAL*8,  POINTER :: WVAA         (:,:)
-
-    !================================================================
-    ! CALC_AOD begins here!
-    !================================================================
-
-    ! Constants State_Chm%Phot
-    NWVAA         = State_Chm%Phot%NWVAA
-    NWVAA0        = State_Chm%Phot%NWVAA0
-
-    ! Scalars in State_Chm%Phot that will be set in this subroutine
-    NWVREQUIRED   = State_Chm%Phot%NWVREQUIRED
-    NRTWVREQUIRED = State_Chm%Phot%NRTWVREQUIRED
-
-    ! Set pointers
-    IWVREQUIRED   => State_Chm%Phot%IWVREQUIRED
-    IRTWVREQUIRED => State_Chm%Phot%IRTWVREQUIRED
-    IWVSELECT     => State_Chm%Phot%IWVSELECT
-    IRTWVSELECT   => State_Chm%Phot%IRTWVSELECT
-    ACOEF_WV      => State_Chm%Phot%ACOEF_WV
-    BCOEF_WV      => State_Chm%Phot%BCOEF_WV
-    CCOEF_WV      => State_Chm%Phot%CCOEF_WV
-    ACOEF_RTWV    => State_Chm%Phot%ACOEF_RTWV
-    BCOEF_RTWV    => State_Chm%Phot%BCOEF_RTWV
-    CCOEF_RTWV    => State_Chm%Phot%CCOEF_RTWV
-    WVAA          => State_Chm%Phot%WVAA
-
-    !cycle over standard wavelengths
-    N0=1
-    N1=NWVAA0
-    NSTEP=1
-    NWVREQUIRED=0
-    DO W=1,Input_Opt%NWVSELECT
-       MINWV     = -999
-       MAXWV     =  999
-       DO N=N0,N1,NSTEP ! 1 to 11
-          WVDIF = WVAA(N,1)-Input_Opt%WVSELECT(W)
-          IF ((WVDIF.LE.0).AND.(WVDIF.GT.MINWV)) THEN
-             MINWV = WVDIF
-             IWVSELECT(1,W)=N             
-          ENDIF
-          IF ((WVDIF.GE.0).AND.(WVDIF.LT.MAXWV)) THEN
-             MAXWV = WVDIF
-             IWVSELECT(2,W)=N
-          ENDIF
-       ENDDO
-       IF (IWVSELECT(2,W).EQ.IWVSELECT(1,W)) THEN
-          !we have a match!
-          MINWV=0
-          MAXWV=0
-          !add this wavelength to those for output
-          NWVREQUIRED=NWVREQUIRED+1
-          IWVREQUIRED(NWVREQUIRED)=IWVSELECT(1,W)
-       ELSE
-          !we are going to have to interpolate to the requested wavelength
-          NWVREQUIRED=NWVREQUIRED+1
-          IWVREQUIRED(NWVREQUIRED)=IWVSELECT(1,W)
-          NWVREQUIRED=NWVREQUIRED+1
-          IWVREQUIRED(NWVREQUIRED)=IWVSELECT(2,W)
-       ENDIF
-
-       !Error check - ensure we have a match or requested wavelength
-       !falls within two LUT tie points
-       IF (MINWV.EQ.-999) THEN
-          ! requested wavelength is shorter than min wv in LUT
-          ! set to min
-          write(6,*) 'ERROR requested wavelength is too short!!'
-          write(6,*) 'Defaulting to LUT min: ',WVAA(1,1)
-          IWVSELECT(1,W)=1
-          IWVSELECT(2,W)=1 !300nm
-          NWVREQUIRED=NWVREQUIRED-1
-          IWVREQUIRED(NWVREQUIRED)=IWVSELECT(1,W)
-       ENDIF
-       IF (MAXWV.EQ.999) THEN
-          ! requested wavelength is longer than min wv in LUT
-          ! set to max
-          write(6,*) 'ERROR requested wavelength is too long!!'
-          write(6,*) 'Defaulting to LUT min: ',WVAA(NWVAA0,1)
-          IWVSELECT(1,W)=NWVAA0
-          IWVSELECT(2,W)=NWVAA0 !1020nm
-          NWVREQUIRED=NWVREQUIRED-1
-          IWVREQUIRED(NWVREQUIRED)=IWVSELECT(1,W)
-       ENDIF
-
-       !now calcualte the angstrom exponent coefs for interpolation -
-       !this is done here to save time and repetition in aerosol_mod.F
-       IF (IWVSELECT(1,W).NE.IWVSELECT(2,W)) THEN
-          ACOEF_WV(W) = WVAA(IWVSELECT(2,W),1)/Input_Opt%WVSELECT(W)
-          BCOEF_WV(W) =1.0d0/(LOG(WVAA(IWVSELECT(2,W),1)/ &
-                                  WVAA(IWVSELECT(1,W),1)))
-          !relative location of selected wavelength between tie points
-          !for interpolating SSA and ASYM for output in aerosol_mod.F and
-          !dust_mod.F
-          CCOEF_WV(W) =(Input_Opt%WVSELECT(W)-WVAA(IWVSELECT(1,W),1))/ &
-                      (WVAA(IWVSELECT(2,W),1)-WVAA(IWVSELECT(1,W),1))
-       ENDIF
-       IF ( Input_Opt%amIRoot ) THEN
-          write(6,*) 'N WAVELENGTHS: ',Input_Opt%NWVSELECT
-          write(6,*) 'WAVELENGTH REQUESTED:',Input_Opt%WVSELECT(W)
-          write(6,*) 'WAVELENGTH REQUIRED:', NWVREQUIRED
-          !write(6,*) IWVSELECT(1,W),WVAA(IWVSELECT(1,W),1)
-          !write(6,*) IWVSELECT(2,W),WVAA(IWVSELECT(2,W),1)
-          !write(6,*) ACOEF_WV(W),BCOEF_WV(W),CCOEF_WV(W)
-          write(6,*) '*********************************'
-       ENDIF
-    ENDDO !Input_Opt%NWVSELECT
-#ifdef RRTMG
-    !repeat for RRTMG wavelengths to get the closest wavelength
-    !indices and the interpolation coefficients
-    !Indices are relative to all wavelengths in the LUT i.e. the RRTMG
-    !wavelengths start at NWVAA0+1
-    N0=NWVAA0+1
-    N1=NWVAA
-    NSTEP=1
-    NRTWVREQUIRED=0
-    DO W=1,Input_Opt%NWVSELECT
-       MINWV     = -999
-       MAXWV     =  999
-       DO N=N0,N1,NSTEP
-          WVDIF = WVAA(N,1)-Input_Opt%WVSELECT(W)
-          IF ((WVDIF.LE.0).AND.(WVDIF.GT.MINWV)) THEN
-             MINWV = WVDIF
-             IRTWVSELECT(1,W)=N
-          ENDIF
-          IF ((WVDIF.GE.0).AND.(WVDIF.LT.MAXWV)) THEN
-             MAXWV = WVDIF
-             IRTWVSELECT(2,W)=N
-          ENDIF
-       ENDDO
-       IF (IRTWVSELECT(2,W).EQ.IRTWVSELECT(1,W)) THEN
-          !we have a match!
-          MINWV=0
-          MAXWV=0
-          !add this wavelength to those for output
-          NRTWVREQUIRED=NRTWVREQUIRED+1
-          IRTWVREQUIRED(NRTWVREQUIRED)=IRTWVSELECT(1,W)
-       ELSE
-          !we are going to have to interpolate to the requested
-          !wavelength
-          NRTWVREQUIRED=NRTWVREQUIRED+1
-          IRTWVREQUIRED(NRTWVREQUIRED)=IRTWVSELECT(1,W)
-          NRTWVREQUIRED=NRTWVREQUIRED+1
-          IRTWVREQUIRED(NRTWVREQUIRED)=IRTWVSELECT(2,W)
-       ENDIF
-
-       !Error check - ensure we have a match or requested wavelength
-       !falls within two LUT tie points
-       IF (MINWV.EQ.-999) THEN
-          ! requested wavelength is shorter than min wv in LUT
-          ! set to min
-          write(6,*) 'ERROR requested wavelength is too short!!'
-          write(6,*) 'Defaulting to LUT min: ',WVAA(NWVAA-1,1)
-          IRTWVSELECT(1,W)=NWVAA-1
-          IRTWVSELECT(2,W)=NWVAA-1
-          NRTWVREQUIRED=NRTWVREQUIRED-1
-          IRTWVREQUIRED(NRTWVREQUIRED)=IRTWVSELECT(1,W)
-       ENDIF
-       IF (MAXWV.EQ.999) THEN
-          ! requested wavelength is longer than min wv in LUT
-          ! set to max
-          write(6,*) 'ERROR requested wavelength is too long!!'
-          write(6,*) 'Defaulting to LUT min: ',WVAA(NWVAA0+1,1)
-          IRTWVSELECT(1,W)=NWVAA0+1
-          IRTWVSELECT(2,W)=NWVAA0+1
-          NRTWVREQUIRED=NRTWVREQUIRED-1
-          IRTWVREQUIRED(NRTWVREQUIRED)=IRTWVSELECT(1,W)
-       ENDIF
-
-       !now calcualte the angstrom exponent coefs for interpolation -
-       !this is done here to save time and repetition in aerosol_mod.F
-       IF (IRTWVSELECT(1,W).NE.IRTWVSELECT(2,W)) THEN
-          ACOEF_RTWV(W) = WVAA(IRTWVSELECT(2,W),1)/Input_Opt%WVSELECT(W)
-          BCOEF_RTWV(W) =1.0d0/(LOG(WVAA(IRTWVSELECT(2,W),1)/ &
-                                    WVAA(IRTWVSELECT(1,W),1)))
-          !relative location of selected wavelength between tie points
-          !for interpolating SSA and ASYM for output in aerosol_mod.F and
-          !dust_mod.F
-          CCOEF_RTWV(W) =(Input_Opt%WVSELECT(W)-WVAA(IRTWVSELECT(1,W),1))/ &
-                      (WVAA(IRTWVSELECT(2,W),1)-WVAA(IRTWVSELECT(1,W),1))
-       ENDIF
-       !convert wavelength index to that required by rrtmg_rad_transfer
-       !i.e. without the standard and LW wavelengths
-       IRTWVSELECT(1,W) = IRTWVSELECT(1,W) - NWVAA0 - NBNDLW
-       IRTWVSELECT(2,W) = IRTWVSELECT(2,W) - NWVAA0 - NBNDLW
-       IF ( Input_Opt%amIRoot ) THEN
-          write(6,*) 'N RT WAVELENGTHS: ',Input_Opt%NWVSELECT
-          write(6,*) 'RT WAVELENGTH REQUESTED:',Input_Opt%WVSELECT(W)
-          write(6,*) 'RT WAVELENGTH REQUIRED:', NRTWVREQUIRED
-          write(6,*) IRTWVSELECT(1,W),WVAA(IRTWVSELECT(1,W)+NWVAA0+NBNDLW,1)
-          write(6,*) IRTWVSELECT(2,W),WVAA(IRTWVSELECT(2,W)+NWVAA0+NBNDLW,1)
-          write(6,*) ACOEF_WV(W),BCOEF_WV(W),CCOEF_WV(W)
-          write(6,*) '*********************************'
-       ENDIF
-    ENDDO !Input_Opt%NWVSELECT
-#endif
-
-    ! Copy values back into State_Chm
-    State_Chm%Phot%NWVREQUIRED   = NWVREQUIRED
-    State_Chm%Phot%NRTWVREQUIRED = NRTWVREQUIRED
-
-    ! Free pointers
-    IWVREQUIRED   => NULL() 
-    IRTWVREQUIRED => NULL()
-    IWVSELECT     => NULL()
-    IRTWVSELECT   => NULL()
-    ACOEF_WV      => NULL()
-    BCOEF_WV      => NULL()
-    CCOEF_WV      => NULL()
-    ACOEF_RTWV    => NULL()
-    BCOEF_RTWV    => NULL()
-    CCOEF_RTWV    => NULL()
-    WVAA          => NULL()
-
-  END SUBROUTINE CALC_AOD
-!EOC
-!------------------------------------------------------------------------------
-!                  GEOS-Chem Global Chemical Transport Model                  !
-!------------------------------------------------------------------------------
-!BOP
-!
 ! !IROUTINE: set_aer
 !
 ! !DESCRIPTION: Subroutine SET\_AER fills out the array MIEDX.
@@ -1316,7 +788,11 @@ CONTAINS
 !
 ! !USES:
 !
-    USE CMN_FJX_Mod, ONLY : AN_, NAA, TITLAA
+#ifdef FASTJX
+    USE CMN_FJX_Mod,    ONLY : AN_, NAA, TITLAA
+#else
+    USE Cldj_Cmn_Mod,   ONLY : AN_, NAA, TITLAA
+#endif
     USE CMN_SIZE_Mod,   ONLY : NRHAER, NRH
     USE ErrCode_Mod
     USE Input_Opt_Mod,  ONLY : OptInput
@@ -1393,7 +869,11 @@ CONTAINS
     ENDDO
 
     ! Stratospheric aerosols - SSA/STS and solid PSCs
+#ifdef FASTJX
     MIEDX(10+(NRHAER*NRH)+1) = 4  ! SSA/LBS/STS
+#else
+    MIEDX(10+(NRHAER*NRH)+1) = 1  ! SSA/LBS/STS
+#endif
     MIEDX(10+(NRHAER*NRH)+2) = 14 ! NAT/ice PSCs
 
     ! Ensure all 'AN_' types are valid selections
@@ -1417,6 +897,259 @@ CONTAINS
             'between 1 and ',i3)
 
   END SUBROUTINE SET_AER
+!EOC
+!------------------------------------------------------------------------------
+!                  GEOS-Chem Global Chemical Transport Model                  !
+!------------------------------------------------------------------------------
+!BOP
+!
+! !IROUTINE: rd_prof_nc
+!
+! !DESCRIPTION: Subroutine RD\_PROF\_NC reads in the reference climatology
+!  from a NetCDF file rather than an ASCII .dat.
+!\\
+!\\
+! !INTERFACE:
+!
+  SUBROUTINE RD_PROF_NC( Input_Opt, State_Grid, State_Chm, RC )
+!
+! !USES:
+!
+    USE ErrCode_Mod
+    USE Input_Opt_Mod,  ONLY : OptInput
+    USE State_Grid_Mod, ONLY : GrdState
+    USE State_Chm_Mod,  ONLY : ChmState
+
+#if defined( MODEL_CESM )
+    USE CAM_PIO_UTILS,     ONLY : CAM_PIO_OPENFILE
+    USE IOFILEMOD,         ONLY : GETFIL
+    USE PIO,               ONLY : PIO_CLOSEFILE
+    USE PIO,               ONLY : PIO_INQ_DIMID
+    USE PIO,               ONLY : PIO_INQ_DIMLEN
+    USE PIO,               ONLY : PIO_INQ_VARID
+    USE PIO,               ONLY : PIO_GET_VAR
+    USE PIO,               ONLY : PIO_NOERR
+    USE PIO,               ONLY : PIO_NOWRITE
+    USE PIO,               ONLY : FILE_DESC_T
+#else
+    USE m_netcdf_io_open
+    USE m_netcdf_io_read
+    USE m_netcdf_io_readattr
+    USE m_netcdf_io_close
+#endif
+!
+! !INPUT PARAMETERS:
+!
+    TYPE(OptInput), INTENT(IN)    :: Input_Opt   ! Input Options object
+    TYPE(GrdState), INTENT(IN)    :: State_Grid  ! Grid State object
+!
+! !INPUT/OUTPUT PARAMETERS:
+!
+    TYPE(ChmState), INTENT(INOUT) :: State_Chm   ! Chemistry state object
+!
+! !OUTPUT PARAMETERS:
+!
+    INTEGER,        INTENT(OUT)   :: RC          ! Success or failure?
+!
+! !REMARKS:
+!  This file was automatically generated by the Perl scripts in the
+!  NcdfUtilities package (which ships w/ GEOS-Chem) and was subsequently
+!  hand-edited.
+!
+! !REVISION HISTORY:
+!  19 Apr 2012 - R. Yantosca - Initial version
+!  See https://github.com/geoschem/geos-chem for complete history
+!EOP
+!------------------------------------------------------------------------------
+!BOC
+!
+! !LOCAL VARIABLES:
+!
+    ! Scalars
+    LOGICAL            :: FileExists          ! Does input file exist?
+    INTEGER            :: fId                 ! netCDF file ID
+
+    ! Strings
+    CHARACTER(LEN=255) :: nc_dir              ! netCDF directory name
+    CHARACTER(LEN=255) :: nc_file             ! netCDF file name
+    CHARACTER(LEN=255) :: nc_path             ! netCDF path name
+    CHARACTER(LEN=255) :: v_name              ! netCDF variable name
+    CHARACTER(LEN=255) :: a_name              ! netCDF attribute name
+    CHARACTER(LEN=255) :: a_val               ! netCDF attribute value
+    CHARACTER(LEN=255) :: FileMsg
+    CHARACTER(LEN=255) :: ErrMsg
+    CHARACTER(LEN=255) :: ThisLoc
+
+    ! Arrays
+    INTEGER            :: st3d(3), ct3d(3)    ! For 3D arrays
+
+#if defined( MODEL_CESM )
+    type(FILE_DESC_T)  :: ncid
+    INTEGER            :: vId, iret
+#endif
+
+    ! Pointers
+    REAL(fp), POINTER :: OREF(:,:,:)
+    REAL(fp), POINTER :: TREF(:,:,:)
+
+    !=================================================================
+    ! RD_PROF_NC begins here!
+    !=================================================================
+
+    ! Initialize
+    ! Assume success
+    RC      = GC_SUCCESS
+    ErrMsg  = ''
+    ThisLoc = ' -> at RD_PROF_NC (in module GeosCore/photolysis_mod.F90)'
+
+#if defined( MODEL_CESM )
+    ! In the CESM model, only read on the root chunk, but on all CPUs (hplin, 7/3/24)
+    IF ( State_Grid%CPU_Subdomain_ID .ne. State_Grid%CPU_Subdomain_FirstID ) RETURN
+#endif
+
+    ! Set pointers
+    OREF => State_Chm%Phot%OREF
+    TREF => State_Chm%Phot%TREF
+
+    ! Directory and file names
+    nc_dir  = TRIM( Input_Opt%CHEM_INPUTS_DIR ) // '/' // 'FastJ_201204' // '/'
+    nc_file = 'fastj.jv_atms_dat.nc'
+    nc_path = TRIM( nc_dir ) // TRIM( nc_file )
+
+    !=================================================================
+    ! In dry-run mode, print file path to dryrun log and exit.
+    ! Otherwise, print file path to stdout and continue.
+    !=================================================================
+
+    ! Test if the file exists
+    INQUIRE( FILE=TRIM( nc_path ), EXIST=FileExists )
+
+    ! Test if the file exists and define an output string
+    IF ( FileExists ) THEN
+       FileMsg = 'PHOTOLYSIS (RD_PROF_NC): Opening'
+    ELSE
+       FileMsg = 'PHOTOLYSIS (RD_PROF_NC): REQUIRED FILE NOT FOUND'
+    ENDIF
+
+    ! Write to stdout for both regular and dry-run simulations
+    IF ( Input_Opt%amIRoot ) THEN
+       WRITE( 6, 300 ) TRIM( FileMsg ), TRIM( nc_path )
+300    FORMAT( a, ' ', a )
+    ENDIF
+
+    ! For dry-run simulations, return to calling program.
+    ! For regular simulations, throw an error if we can't find the file.
+    IF ( Input_Opt%DryRun ) THEN
+       RETURN
+    ELSE
+       IF ( .not. FileExists ) THEN
+          WRITE( ErrMsg, 300 ) TRIM( FileMsg ), TRIM( nc_path )
+          CALL GC_Error( ErrMsg, RC, ThisLoc )
+          RETURN
+       ENDIF
+    ENDIF
+
+    !=========================================================================
+    ! Open and read data from the netCDF file
+    !=========================================================================
+
+    ! Open netCDF file
+#if defined( MODEL_CESM )
+    ! Note: In CESM environment, PIO_OPENFILE is a collective operation and must
+    ! be called by all CPUs. (hplin, 7/3/24)
+    CALL CAM_PIO_OPENFILE( ncid, TRIM(nc_path), PIO_NOWRITE )
+#else
+    CALL Ncop_Rd( fId, TRIM(nc_path) )
+#endif
+
+    ! Echo info to stdout
+    IF ( Input_Opt%amIRoot ) THEN
+       WRITE( 6, 100 ) REPEAT( '%', 79 )
+       WRITE( 6, 110 ) TRIM(nc_file)
+       WRITE( 6, 120 ) TRIM(nc_dir)
+    ENDIF
+
+    !----------------------------------------
+    ! VARIABLE: T
+    !----------------------------------------
+
+    ! Variable name
+    v_name = "T"
+
+    ! Read T from file
+    st3d   = (/  1,  1,  1 /)
+    ct3d   = (/ 51, 18, 12 /)
+#if defined( MODEL_CESM )
+    iret = PIO_INQ_VARID( ncid, trim(v_name), vid  )
+    iret = PIO_GET_VAR( ncid, vid, st3d, ct3d, TREF )
+#else
+    CALL NcRd( TREF, fId, TRIM(v_name), st3d, ct3d )
+
+    ! Read the T:units attribute
+    a_name = "units"
+    CALL NcGet_Var_Attributes( fId,TRIM(v_name),TRIM(a_name),a_val )
+
+    ! Echo info to stdout
+    IF ( Input_Opt%amIRoot ) THEN
+       WRITE( 6, 130 ) TRIM(v_name), TRIM(a_val)
+    ENDIF
+#endif
+
+    !----------------------------------------
+    ! VARIABLE: O3
+    !----------------------------------------
+
+    ! Variable name
+    v_name = "O3"
+
+    ! Read O3 from file
+    st3d   = (/  1,  1,  1 /)
+    ct3d   = (/ 51, 18, 12 /)
+#if defined( MODEL_CESM )
+    iret = PIO_INQ_VARID( ncid, trim(v_name), vid  )
+    iret = PIO_GET_VAR( ncid, vid, st3d, ct3d, OREF )
+#else
+    CALL NcRd( OREF, fId, TRIM(v_name), st3d, ct3d )
+
+    ! Read the O3:units attribute
+    a_name = "units"
+    CALL NcGet_Var_Attributes( fId,TRIM(v_name),TRIM(a_name),a_val )
+
+    ! Echo info to stdout
+    IF ( Input_Opt%amIRoot ) THEN
+       WRITE( 6, 130 ) TRIM(v_name), TRIM(a_val)
+    ENDIF
+#endif
+
+    !=================================================================
+    ! Cleanup and quit
+    !=================================================================
+
+    ! Close netCDF file
+#if defined( MODEL_CESM )
+    CALL PIO_CLOSEFILE( ncid )
+#else
+    CALL NcCl( fId )
+#endif
+
+    ! Echo info to stdout
+    IF ( Input_Opt%amIRoot ) THEN
+       WRITE( 6, 140 )
+       WRITE( 6, 100 ) REPEAT( '%', 79 )
+    ENDIF
+
+    ! Free pointers
+    OREF => NULL()
+    TREF => NULL()
+
+    ! FORMAT statements
+100 FORMAT( a                                              )
+110 FORMAT( '%% Opening file  : ',         a               )
+120 FORMAT( '%%  in directory : ',         a, / , '%%'     )
+130 FORMAT( '%% Successfully read ',       a, ' [', a, ']' )
+140 FORMAT( '%% Successfully closed file!'                 )
+
+  END SUBROUTINE RD_PROF_NC
 !EOC
 
 END MODULE PHOTOLYSIS_MOD

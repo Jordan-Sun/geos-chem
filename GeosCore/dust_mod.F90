@@ -49,9 +49,9 @@ MODULE DUST_MOD
 ! !PRIVATE TYPES:
 !
   ! Species ID flags
-  INTEGER               :: id_DST1,  id_DST2,  id_DST3,   id_DST4
-  INTEGER               :: id_DAL1,  id_DAL2,  id_DAL3,   id_DAL4
-  INTEGER               :: id_DUST1, id_NK1
+  INTEGER               :: id_DST1,   id_DST2,  id_DST3,   id_DST4
+  INTEGER               :: id_DAL1,   id_DAL2,  id_DAL3,   id_DAL4
+  INTEGER               :: id_DUST01, id_NK01
 
   ! Arrays
   REAL(fp), ALLOCATABLE :: FRAC_S(:)
@@ -339,10 +339,6 @@ CONTAINS
 !
 ! !USES:
 !
-#ifdef BPCH_DIAG
-    USE CMN_DIAG_MOD             ! ND44
-    USE DIAG_MOD,           ONLY : AD44
-#endif
     USE ErrCode_Mod
     USE ERROR_MOD
     USE Input_Opt_Mod,      ONLY : OptInput
@@ -353,8 +349,9 @@ CONTAINS
     USE State_Grid_Mod,     ONLY : GrdState
     USE State_Met_Mod,      ONLY : MetState
     USE TIME_MOD,           ONLY : GET_TS_CHEM
-    USE TOMAS_MOD,          ONLY : IBINS, Xk, SRTDUST
+    USE TOMAS_MOD,          ONLY : Xk, SRTDUST
     USE Species_Mod,        ONLY : Species
+    USE UnitConv_Mod
 !
 ! !INPUT PARAMETERS:
 !
@@ -385,7 +382,8 @@ CONTAINS
 
     ! Non-SAVEd scalars
     INTEGER                :: N, BIN, I, J, L, NN, IDISP
-    REAL(fp)               :: DU0(State_Grid%NX,State_Grid%NY,State_Grid%NZ,IBINS)
+    REAL(fp)               :: DU0(State_Grid%NX,State_Grid%NY,State_Grid%NZ, &
+                                  State_Chm%nTomasBins)
     REAL(fp)               :: DIF, FLUXN, FLUXD
     REAL(fp)               :: DT_SETTL, AREA_CM2
 
@@ -406,9 +404,9 @@ CONTAINS
     RC      = GC_SUCCESS
 
     ! Check that species units are in [kg] (ewl, 8/13/15)
-    IF ( TRIM( State_Chm%Spc_Units ) /= 'kg' ) THEN
-       MSG = 'Incorrect species units: ' // TRIM(State_Chm%Spc_Units)
-       LOC = 'Routine SETTLEDUST in dust_mod.F'
+    IF ( .not. Check_Units( State_Chm, KG_SPECIES ) ) THEN
+       MSG = 'Not all species have units "kg"!'
+       LOC = 'Routine SETTLEDUST in GeosCore/dust_mod.F90'
        CALL GC_Error( MSG, RC, LOC )
     ENDIF
 
@@ -424,10 +422,10 @@ CONTAINS
     DT_SETTL = GET_TS_CHEM()
 
     ! Save initial dust mass
-    DO BIN = 1, IBINS
+    DO BIN = 1, State_Chm%nTomasBins
 
        ! Species ID
-       N = id_DUST1 - 1 + BIN
+       N = id_DUST01 - 1 + BIN
 
        DO L   = 1, State_Grid%NZ
        DO J   = 1, State_Grid%NY
@@ -439,21 +437,22 @@ CONTAINS
     ENDDO
 
     ! Dust settling
-    CALL DRY_SETTLING( Input_Opt, State_Chm,  State_Diag, State_Grid, &
-                       State_Met, id_DUST1,   id_DUST1-1+IBINS, RC )
+    CALL DRY_SETTLING( Input_Opt, State_Chm, State_Diag, State_Grid, &
+                       State_Met, id_DUST01, id_DUST01-1+State_Chm%nTomasBins,&
+                       RC )
 
     ! Calculate change in number to correspond with dust redistribution
     ! by gravitational settling
-    DO BIN = 1, IBINS
+    DO BIN = 1, State_Chm%nTomasBins
 
        ! Species ID
-       N       =  id_DUST1 - 1 + BIN
+       N       =  id_DUST01 - 1 + BIN
 
        ! Look up this species in the species database
        ThisSpc => State_Chm%SpcData(N)%Info
 
        ! Drydep index (??? -- replace w/ species DB info?)
-       NN      = State_Chm%nDryDep + (SRTDUST-1)*IBINS + BIN
+       NN      = State_Chm%nDryDep + (SRTDUST-1)*State_Chm%nTomasBins + BIN
 
        DO J = 1, State_Grid%NY
        DO I = 1, State_Grid%NX
@@ -466,9 +465,9 @@ CONTAINS
           FLUXN = 0e+0_fp
 
           DO L = 1, State_Grid%NZ
-             DIF = DU0(I,J,L,BIN) - Spc(id_DUST1-1+BIN)%Conc(I,J,L)
+             DIF = DU0(I,J,L,BIN) - Spc(id_DUST01-1+BIN)%Conc(I,J,L)
 
-             Spc(id_NK1-1+BIN)%Conc(I,J,L) = Spc(id_NK1-1+BIN)%Conc(I,J,L) - &
+             Spc(id_NK01-1+BIN)%Conc(I,J,L) = Spc(id_NK01-1+BIN)%Conc(I,J,L) - &
                                        DIF/(SQRT( Xk(BIN)*Xk(BIN+1)))
 
              ! Convert flux from [kg/s] to [molec/cm2/s]
@@ -480,27 +479,6 @@ CONTAINS
                      DT_SETTL * AVO / &
                      ( 1.e-3_fp * ThisSpc%MW_g ) / AREA_CM2
           ENDDO
-
-#ifdef BPCH_DIAG
-          !===========================================================
-          !  Dry deposition diagnostic [#/cm2/s] (bpch)
-          !===========================================================
-          IF ( ND44 > 0 ) THEN
-
-             !--------------------------------------------------------
-             ! ND44 DIAGNOSTIC (bpch)
-             ! Dry deposition flux loss [#/cm2/s]
-             !
-             ! NOTE: Bpch diagnostics are being phased out.
-             !--------------------------------------------------------
-             !%%% NOTE: Now use TOMAS_IDDEP, which replicates the
-             !%%% since-removed Input_Opt%IDDEP field (bmy, 3/17/17)
-             AD44(I,J,TOMAS_IDDEP(BIN),1) = AD44(I,J,TOMAS_IDDEP(BIN),1) +  &
-                                            FLUXN
-             AD44(I,J,NN,1) = AD44(I,J,NN,1) + FLUXD
-          ENDIF
-#endif
-
        ENDDO
        ENDDO
 
@@ -533,10 +511,6 @@ CONTAINS
 !
 ! !USES:
 !
-#ifdef BPCH_DIAG
-    USE CMN_DIAG_MOD             ! ND59
-    USE DIAG_MOD,           ONLY : AD59_DUST, AD59_NUMB  !(win, 7/17/09)
-#endif
     USE ErrCode_Mod
     USE ERROR_MOD,          ONLY : DEBUG_MSG
     USE Input_Opt_Mod,      ONLY : OptInput
@@ -545,7 +519,7 @@ CONTAINS
     USE State_Diag_Mod,     ONLY : DgnState
     USE State_Grid_Mod,     ONLY : GrdState
     USE State_Met_Mod,      ONLY : MetState
-    USE TOMAS_MOD,          ONLY : IBINS, XK             !(win, 7/17/09)
+    USE TOMAS_MOD,          ONLY : XK
 !
 ! !INPUT PARAMETERS:
 !
@@ -580,7 +554,7 @@ CONTAINS
     LOGICAL           :: LINTERP
     INTEGER           :: I, J, K, N
     REAL(fp)          :: MEMIS
-    REAL(fp)          :: MINIT(State_Grid%NX,State_Grid%NY,1,IBINS)
+    REAL(fp)          :: MINIT(State_Grid%NX,State_Grid%NY,1,State_Chm%nTomasBins)
 
     ! Pointers
     TYPE(SpcConc), POINTER :: Spc(:)
@@ -606,7 +580,7 @@ CONTAINS
     IF ( FIRST ) THEN
 
        ! Return if dust ID flags are not defined
-       IF ( id_DUST1 == 0 ) THEN
+       IF ( id_DUST01 == 0 ) THEN
           IF ( LDUST ) THEN
              ErrMsg = 'LDUST=T but dust species are undefined!'
              CALL GC_Error( ErrMsg, RC, ThisLoc )
@@ -624,10 +598,10 @@ CONTAINS
     !=================================================================
     ! For TOMAS microphysics
     !=================================================================
-    IF ( id_NK1 > 0 .and. id_DUST1 > 0 ) THEN
+    IF ( id_NK01 > 0 .and. id_DUST01 > 0 ) THEN
 
-       DO N = 1, IBINS
-          MINIT(:,:,1,N) = Spc(id_DUST1+N-1)%Conc(:,:,1)
+       DO N = 1, State_Chm%nTomasBins
+          MINIT(:,:,1,N) = Spc(id_DUST01+N-1)%Conc(:,:,1)
        ENDDO
 
        IF ( LDEAD ) THEN
@@ -643,26 +617,6 @@ CONTAINS
           ENDIF
        ENDIF
 
-#ifdef BPCH_DIAG
-       IF ( ND59 > 0 ) THEN
-          DO K = 1, IBINS
-          DO J = 1, State_Grid%NY
-          DO I = 1, State_Grid%NX
-             MEMIS = Spc(id_DUST1-1+K)%Conc(I,J,1) - MINIT(I,J,1,K)
-             IF ( MEMIS == 0.e+0_fp ) GOTO 10
-
-             AD59_DUST(I,J,1,K) = AD59_DUST(I,J,1,K) + MEMIS ! kg ????
-             Spc(id_NK1-1+K)%Conc(I,J,1) = Spc(id_NK1-1+K)%Conc(I,J,1) + &
-                                     MEMIS / (sqrt(Xk(K)*Xk(K+1)))
-
-             AD59_NUMB(I,J,1,K) = AD59_NUMB(I,J,1,K) + &
-                                  MEMIS / (sqrt(Xk(K)*Xk(K+1)))
-10           CONTINUE
-          ENDDO
-          ENDDO
-          ENDDO
-       ENDIF
-#endif
     ENDIF
 
     ! Free pointers
@@ -1266,10 +1220,10 @@ CONTAINS
     INTEGER,  POINTER :: IWVSELECT  (:,:)
     REAL*8,   POINTER :: ACOEF_WV (:)
     REAL*8,   POINTER :: BCOEF_WV (:)
-    REAL*8,   POINTER :: RDAA     (:,:)
-    REAL*8,   POINTER :: QQAA     (:,:,:)
-    REAL*8,   POINTER :: SSAA     (:,:,:)
-    REAL*8,   POINTER :: ASYMAA   (:,:,:)
+    REAL*8,   POINTER :: RDAA     (:,:,:)
+    REAL*8,   POINTER :: QQAA     (:,:,:,:)
+    REAL*8,   POINTER :: SSAA     (:,:,:,:)
+    REAL*8,   POINTER :: ASYMAA   (:,:,:,:)
     REAL(fp), POINTER :: ODMDUST  (:,:,:,:,:)
 #ifdef RRTMG
     REAL*8,   POINTER :: RTODAER  (:,:,:,:,:)
@@ -1404,8 +1358,8 @@ CONTAINS
           ! dust stored in the IDST species bin of LUT variables
           ODMDUST(I,J,L,IWV,N) = 0.75e+0_fp * &
                                  State_Met%BXHEIGHT(I,J,L) * &
-                                 DUST(I,J,L,N) * QQAA(IWV,N,IDST)  / &
-                                 ( MSDENS(N) * RDAA(N,IDST) * 1.0e-6_fp)
+                                 DUST(I,J,L,N) * QQAA(IWV,N,IDST,State_Chm%Phot%DRg)  / &
+                                 ( MSDENS(N) * RDAA(N,IDST,State_Chm%Phot%DRg) * 1.0e-6_fp)
 
 #ifdef RRTMG
           !add dust optics to the RT code arrays
@@ -1413,8 +1367,8 @@ CONTAINS
           !will keep this way for uniformity for now but
           !possibly could deal with SSA and ASYM in RT module
           RTODAER(I,J,L,IWV,NAER+2+N) = ODMDUST(I,J,L,IWV,N)
-          RTSSAER(I,J,L,IWV,NAER+2+N) = SSAA(IWV,N,IDST)
-          RTASYMAER(I,J,L,IWV,NAER+2+N) = ASYMAA(IWV,N,IDST)
+          RTSSAER(I,J,L,IWV,NAER+2+N) = SSAA(IWV,N,IDST,State_Chm%Phot%DRg)
+          RTASYMAER(I,J,L,IWV,NAER+2+N) = ASYMAA(IWV,N,IDST,State_Chm%Phot%DRg)
 #endif
 
        ENDDO
@@ -1451,7 +1405,7 @@ CONTAINS
        ! Skip non-chemistry boxes
        IF ( .not. State_Met%InChemGrid(I,J,L) ) CYCLE
 
-       ERADIUS(I,J,L,N) = RDAA(N,IDST) * 1.0e-4_fp
+       ERADIUS(I,J,L,N) = RDAA(N,IDST,State_Chm%Phot%DRg) * 1.0e-4_fp
 
        TAREA(I,J,L,N)   = 3.e+0_fp / ERADIUS(I,J,L,N) * &
                           DUST(I,J,L,N) / MSDENS(N)
@@ -2080,7 +2034,7 @@ CONTAINS
     USE State_Diag_Mod,     ONLY : DgnState
     USE State_Grid_Mod,     ONLY : GrdState
 #ifdef TOMAS
-    USE TOMAS_MOD,          ONLY : IBINS, Xk
+    USE TOMAS_MOD,          ONLY : Xk
 #endif
 !
 ! !INPUT PARAMETERS:
@@ -2169,8 +2123,8 @@ CONTAINS
     !=================================================================
 
     ! TOMAS species ID flags
-    id_DUST1 = Ind_('DUST1')
-    id_NK1   = Ind_('NK1'  )
+    id_DUST01 = Ind_('DUST01')
+    id_NK01   = Ind_('NK01'  )
 
     !----------------------------------
     ! Set up FRAC_S (only for Ginoux)
@@ -2188,9 +2142,9 @@ CONTAINS
        ! Initialize
        TOMAS_IDDEP = 0
 
-       DO BIN = 1, IBINS
+       DO BIN = 1, State_Chm%nTomasBins
           DO N   = 1, State_Chm%nDryDep
-             IF ( State_Chm%Map_DryDep(N) == ( id_NK1-1+BIN ) )THEN
+             IF ( State_Chm%Map_DryDep(N) == ( id_NK01-1+BIN ) )THEN
                 TOMAS_IDDEP(BIN) = N
                 GOTO 100
              ENDIF

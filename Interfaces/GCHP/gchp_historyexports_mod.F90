@@ -371,7 +371,7 @@ CONTAINS
        HistoryConfig%ConfigFileRead = .TRUE.
     ELSE
        CALL GC_ERROR( ErrMsg, RC, Iam )
-       _ASSERT(.FALSE., 'informative message here')
+       _ASSERT(.FALSE., 'Error in routine Init_HistoryExport!  This could indicate an error or typo in HISTORY.rc.')
        RETURN
     ENDIF
 
@@ -847,11 +847,10 @@ CONTAINS
              EXIT
           ENDIF
 #if defined( MODEL_GEOS )
-          ! If using GEOS-5, flip the data vertically to match model
-          ! convention
+          ! Flip the data vertically to match model convention
           LMAX = SIZE(current%ExportData3d, 3)
           current%ExportData3d(:,:,1:LMAX) =  &
-                              current%ExportData3d(:,:,LMAX:1:-1)
+                                 current%ExportData3d(:,:,LMAX:1:-1)
 #endif
        ENDIF
 

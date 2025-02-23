@@ -42,6 +42,7 @@ cd ${srcrundir}
 
 # Source common bash functions from scripts in the run/shared folder
 . ${gcdir}/run/shared/setupConfigFiles.sh      # Config file editing
+. ${gcdir}/run/GCClassic/setupForRestarts.sh   # Functions for restart files
 . ${gcdir}/run/shared/newUserRegistration.sh   # 1st-time user registration
 . ${gcdir}/run/shared/singleCarbonSpecies.sh   # Single carbon species setup
 
@@ -104,16 +105,15 @@ RUNDIR_VARS+="RUNDIR_DATA_ROOT=$GC_DATA_ROOT\n"
 printf "${thinline}Choose simulation type:${thinline}"
 printf "   1. Full chemistry\n"
 printf "   2. Aerosols only\n"
-printf "   3. CH4\n"
-printf "   4. CO2\n"
-printf "   5. Hg\n"
-printf "   6. POPs\n"
-printf "   7. Tagged CH4\n"
-printf "   8. Tagged CO\n"
-printf "   9. Tagged O3\n"
-printf "  10. TransportTracers\n"
-printf "  11. Trace metals\n"
-printf "  12. Carbon\n"
+printf "   3. Carbon\n"
+printf "   4. Hg\n"
+printf "   5. POPs\n"
+printf "   6. Tagged O3\n"
+printf "   7. TransportTracers\n"
+printf "   8. Trace metals\n"
+printf "   9. CH4\n"
+printf "  10. CO2\n"
+printf "  11. Tagged CO\n"
 valid_sim=0
 while [ "${valid_sim}" -eq 0 ]; do
     read -p "${USER_PROMPT}" sim_num
@@ -123,25 +123,23 @@ while [ "${valid_sim}" -eq 0 ]; do
     elif [[ ${sim_num} = "2" ]]; then
 	sim_name=aerosol
     elif [[ ${sim_num} = "3" ]]; then
-	sim_name=CH4
-    elif [[ ${sim_num} = "4" ]]; then
-	sim_name=CO2
-    elif [[ ${sim_num} = "5" ]]; then
-	sim_name=Hg
-    elif [[ ${sim_num} = "6" ]]; then
-	sim_name=POPs
-    elif [[ ${sim_num} = "7" ]]; then
-	sim_name=tagCH4
-    elif [[ ${sim_num} = "8" ]]; then
-	sim_name=tagCO
-    elif [[ ${sim_num} = "9" ]]; then
-	sim_name=tagO3
-    elif [[ ${sim_num} = "10" ]]; then
-	sim_name=TransportTracers
-    elif [[ ${sim_num} = "11" ]]; then
-	sim_name=metals
-    elif [[ ${sim_num} = "12" ]]; then
 	sim_name=carbon
+    elif [[ ${sim_num} = "4" ]]; then
+	sim_name=Hg
+    elif [[ ${sim_num} = "5" ]]; then
+	sim_name=POPs
+    elif [[ ${sim_num} = "6" ]]; then
+	sim_name=tagO3
+    elif [[ ${sim_num} = "7" ]]; then
+	sim_name=TransportTracers
+    elif [[ ${sim_num} = "8" ]]; then
+	sim_name=metals
+    elif [[ ${sim_num} = "9" ]]; then
+	sim_name=CH4
+    elif [[ ${sim_num} = "10" ]]; then
+	sim_name=CO2
+    elif [[ ${sim_num} = "11" ]]; then
+	sim_name=tagCO
     else
         valid_sim=0
 	printf "Invalid simulation option. Try again.\n"
@@ -340,7 +338,8 @@ fi
 printf "${thinline}Choose meteorology source:${thinline}"
 printf "  1. MERRA-2 (Recommended)\n"
 printf "  2. GEOS-FP \n"
-printf "  3. GISS ModelE2.1 (GCAP 2.0)\n"
+printf "  3. GEOS-IT (Beta release)\n"
+printf "  4. GISS ModelE2.1 (GCAP 2.0)\n"
 
 valid_met=0
 while [ "${valid_met}" -eq 0 ]; do
@@ -348,15 +347,39 @@ while [ "${valid_met}" -eq 0 ]; do
     valid_met=1
     if [[ ${met_num} = "1" ]]; then
 	met="merra2"
-        shared_met_settings=${gcdir}/run/shared/settings/merra2.txt
+	shared_met_settings=${gcdir}/run/shared/settings/merra2.txt
 	RUNDIR_VARS+="RUNDIR_MET_FIELD_CONFIG='HEMCO_Config.rc.gmao_metfields'\n"
     elif [[ ${met_num} = "2" ]]; then
 	met="geosfp"
-        shared_met_settings=${gcdir}/run/shared/settings/geosfp.txt
+	shared_met_settings=${gcdir}/run/shared/settings/geosfp/geosfp.preprocessed_ll.txt
 	RUNDIR_VARS+="RUNDIR_MET_FIELD_CONFIG='HEMCO_Config.rc.gmao_metfields'\n"
+
+	# Print warning about GEOS-FP and require user to acknowledge it.
+	fp_msg="WARNING: The convection scheme used to generate archived GEOS-FP meteorology \nfiles changed from RAS to Grell-Freitas starting June 1 2020 with impact on \nvertical transport. Discussion and analysis of the impact is available at \ngithub.com/geoschem/geos-chem/issues/1409. In addition, there is a bug in \nconvective precipitation flux following the switch where all values are zero \nin the input files. This bug is addressed by computing fluxes online for runs \nstarting on or after June 1 2020. The fix does not extend to the case of running \nacross the time boundary. Due to these issues we recommend splitting up GEOS-FP \nruns in time such that a single simulation does not span the switch. Configure \none run to end on June 1 2020 and then use its output restart to start another \nrun on June 1. Alternatively consider using MERRA2. If you wish to use a \nGEOS-FP meteorology year different from your simulation year please create a \nGEOS-Chem GitHub issue for assistance to avoid accidentally using zero \nconvective precipitation flux.\n"
+	printf "\n${fp_msg}\n"
+	printf "This warning will be printed to run directory file warnings.txt.\n"
+	printf "${thinline}Enter y to acknowledge and proceed, or q to quit:${thinline}"
+	valid_fp_accept=0
+	while [ "${valid_fp_accept}" -eq 0 ]; do
+	    read -p "${USER_PROMPT}" fp_accept
+	    valid_fp_accept=1
+	    if [[ ${fp_accept} = "y" ]]; then
+		x=0
+	    elif [[ ${fp_accept} = "q" ]]; then
+		exit
+	    else
+		valid_fp_accept=0
+		printf "Invalid option. Try again.\n"
+	    fi
+	done
+
     elif [[ ${met_num} = "3" ]]; then
+	met="geosit"
+	shared_met_settings=${gcdir}/run/shared/settings/geosit/geosit.preprocessed_ll.txt
+	RUNDIR_VARS+="RUNDIR_MET_FIELD_CONFIG='HEMCO_Config.rc.gmao_metfields'\n"
+    elif [[ ${met_num} = "4" ]]; then
 	met="ModelE2.1"
-        shared_met_settings=${gcdir}/run/shared/settings/modele2.1.txt
+	shared_met_settings=${gcdir}/run/shared/settings/modele2.1.txt
 	RUNDIR_VARS+="RUNDIR_MET_FIELD_CONFIG='HEMCO_Config.rc.gcap2_metfields'\n"
     else
 	valid_met=0
@@ -450,8 +473,13 @@ if [[ ${met} = "ModelE2.1" ]]; then
     # NOTE: Benchmark simulations always use the climatological emissions!
     if [[ "x${sim_name}" == "xfullchem" ]]  ||  \
        [[ "x${sim_name}" == "xaerosol"  ]]; then
-        RUNDIR_VARS+="RUNDIR_VOLC_CLIMATOLOGY='\$ROOT/VOLCANO/v2021-09/so2_volcanic_emissions_CARN_v202005.degassing_only.rc'\n"
-        RUNDIR_VARS+="RUNDIR_VOLC_TABLE='\$ROOT/VOLCANO/v2021-09/so2_volcanic_emissions_CARN_v202005.degassing_only.rc'\n"
+        RUNDIR_VARS+="RUNDIR_VOLC_CLIMATOLOGY='\$ROOT/VOLCANO/v2024-04/so2_volcanic_emissions_CARN_v202401.degassing_only.rc'\n"
+
+	if [[ "x${sim_extra_option}" == "xbenchmark" ]]; then
+	    RUNDIR_VARS+="RUNDIR_VOLC_TABLE='\$ROOT/VOLCANO/v2024-04/so2_volcanic_emissions_CARN_v202401.degassing_only.rc'\n"
+	else
+	    RUNDIR_VARS+="RUNDIR_VOLC_TABLE='\$ROOT/VOLCANO/v2024-04/\$YYYY/\$MM/so2_volcanic_emissions_Carns.\$YYYY\$MM\$DD.rc'\n"
+	fi
     fi
 
 else
@@ -467,16 +495,21 @@ else
     # NOTE: Benchmark simulations always use the climatological emissions!
     if [[ "x${sim_name}" == "xfullchem" ]]  ||  \
        [[ "x${sim_name}" == "xaerosol"  ]]; then
-	RUNDIR_VARS+="RUNDIR_VOLC_CLIMATOLOGY='\$ROOT/VOLCANO/v2021-09/so2_volcanic_emissions_CARN_v202005.degassing_only.rc'\n"
+	RUNDIR_VARS+="RUNDIR_VOLC_CLIMATOLOGY='\$ROOT/VOLCANO/v2024-04/so2_volcanic_emissions_CARN_v202401.degassing_only.rc'\n"
 
 	if [[ "x${sim_extra_option}" == "xbenchmark" ]]; then
-	    RUNDIR_VARS+="RUNDIR_VOLC_TABLE='\$ROOT/VOLCANO/v2021-09/so2_volcanic_emissions_CARN_v202005.degassing_only.rc'\n"
+	    RUNDIR_VARS+="RUNDIR_VOLC_TABLE='\$ROOT/VOLCANO/v2024-04/so2_volcanic_emissions_CARN_v202401.degassing_only.rc'\n"
 	else
-	    RUNDIR_VARS+="RUNDIR_VOLC_TABLE='\$ROOT/VOLCANO/v2021-09/\$YYYY/\$MM/so2_volcanic_emissions_Carns.\$YYYY\$MM\$DD.rc'\n"
+	    RUNDIR_VARS+="RUNDIR_VOLC_TABLE='\$ROOT/VOLCANO/v2024-04/\$YYYY/\$MM/so2_volcanic_emissions_Carns.\$YYYY\$MM\$DD.rc'\n"
 	fi
     fi
 
  fi
+
+# Turn off MEGAN for the aerosol-only simulation
+if [[ "x${sim_name}" == "xaerosol"  ]]; then
+    RUNDIR_VARS+="RUNDIR_MEGAN_EXT='off'\n"
+fi
 
 #-----------------------------------------------------------------
 # Ask user to select horizontal resolution
@@ -488,6 +521,12 @@ if [[ "x${met}" == "xModelE2.1" || "x${met}" == "xModelE2.2" ]]; then
     printf "  3. 0.5  x 0.625 *\n"
     printf "  4. 0.25 x 0.3125 *${thinline}"
     printf "  \n* Will be interpolated online via FlexGrid from native 2.0 x 2.5 resolution\n"
+elif [[ ${met} = "geosit" ]]; then
+    printf "  1. 4.0  x 5.0\n"
+    printf "  2. 2.0  x 2.5\n"
+    if [[ "${sim_name}" = "TransportTracers" ]]; then
+	printf "  3. 0.5  x 0.625\n"
+    fi
 else
     printf "  1. 4.0  x 5.0\n"
     printf "  2. 2.0  x 2.5\n"
@@ -527,7 +566,7 @@ while [ "${valid_res}" -eq 0 ]; do
     fi
 done
 
-if [[ ${grid_res} = "05x0625" ]] || [[ ${grid_res} = "025x03125" ]]; then
+if [[ "${met}" != "geosit" ]] && [[ "${grid_res}" = "05x0625" || "${grid_res}" = "025x03125" ]]; then
     printf "${thinline}Choose horizontal grid domain:${thinline}"
     printf "  1. Global\n"
     printf "  2. Asia\n"
@@ -666,6 +705,7 @@ if [[ ${met} = "ModelE2.1" ]]; then
     fi
 else
     RUNDIR_VARS+="RUNDIR_GISS_RES='not_used'\n"
+    # Use GEOS-FP values as placeholders for GEOS-IT until parameters derived
     if [[ "x${sim_name}" == "xfullchem" || "x${sim_name}" == "xaerosol" ]]; then
 	if [[ "x${met}" == "xgeosfp" && "x${grid_res}" == "x4x5" ]]; then
 	    RUNDIR_VARS+="RUNDIR_DUSTDEAD_TF='8.3286e-4'\n"
@@ -675,6 +715,10 @@ else
 	    RUNDIR_VARS+="RUNDIR_DUSTDEAD_TF='7.8533e-4'\n"
 	elif [[ "x${met}" == "xmerra2" && "x${grid_res}" == "x2x25" ]]; then
 	    RUNDIR_VARS+="RUNDIR_DUSTDEAD_TF='4.7586e-4'\n"
+	elif [[ "x${met}" == "xgeosit" && "x${grid_res}" == "x4x5" ]]; then
+	    RUNDIR_VARS+="RUNDIR_DUSTDEAD_TF='8.3286e-4'\n"
+	elif [[ "x${met}" == "xgeosit" && "x${grid_res}" == "x2x25" ]]; then
+	    RUNDIR_VARS+="RUNDIR_DUSTDEAD_TF='5.0416e-4'\n"
 	else
 	    RUNDIR_VARS+="RUNDIR_DUSTDEAD_TF='-999.0e0'\n"
 	fi
@@ -688,7 +732,7 @@ fi
 #-----------------------------------------------------------------
 printf "${thinline}Choose number of levels:${thinline}"
 
-if [[ ${met} = "geosfp" ]] || [[ ${met} = "merra2" ]]; then
+if [[ ${met} = "geosfp" ]] || [[ ${met} = "merra2" || ${met} = "geosit" ]]; then
     printf "  1. 72 (native)\n"
     printf "  2. 47 (reduced)\n"
 
@@ -800,7 +844,7 @@ if [ -z "$1" ]; then
 	else
 	    rundir_name=gc_${grid_display}_${met}_${sim_name}_${sim_extra_option}
 	fi
-	printf "  -- Using default directory name ${rundir_name}\n"
+	printf "  -- Using default directory name ${rundir_name}"
     fi
 else
     rundir_name=$1
@@ -834,10 +878,6 @@ done
 mkdir -p ${rundir}
 mkdir -p ${rundir}/Restarts
 
-# Define a subdirectory for rundir configuration files
-rundir_config=${rundir}/CreateRunDirLogs
-mkdir -p ${rundir_config}
-
 # Copy run directory files and subdirectories
 cp ${gcdir}/run/shared/cleanRunDir.sh       ${rundir}
 cp ${gcdir}/run/shared/download_data.py     ${rundir}
@@ -852,6 +892,7 @@ if [[ ${met} = "ModelE2.1" ]] || [[ ${met} = "ModelE2.2" ]]; then
   cp ${gcdir}/run/shared/download_data.gcap2.40L.yml ${rundir}/download_data.yml
 fi
 
+# Copy the OH metrics Python script to the rundir (fullchem/CH4 only)
 if [[ "x${sim_name}" == "xfullchem" || "x${sim_name}" == "xCH4" ]]; then
     cp -r ${gcdir}/run/shared/metrics.py  ${rundir}
     chmod 744 ${rundir}/metrics.py
@@ -867,7 +908,7 @@ chmod 744 ${rundir}/archiveRun.sh
 # inactive species that are active in the other simulations, and this
 # causes a conflict.  Work out a better solution later.
 #  -- Bob Yantosca, 10 Dec 2021
-if [[ "x${sim_num}" == "x5" ]]; then
+if [[ "x${sim_name}" == "xHg" ]]; then
     cp -r ${gcdir}/run/shared/species_database_hg.yml ${rundir}/species_database.yml
 else
     cp -r ${gcdir}/run/shared/species_database.yml ${rundir}
@@ -903,7 +944,8 @@ cd ${rundir}
 # start year/month/day matches default initial restart file.
 if [[ "x${sim_name}" == "xHg"     ||
       "x${sim_name}" == "xCH4"    ||
-      "x${sim_name}" == "xtagCH4" ||
+      "x${sim_name}" == "xCO2"    ||
+      "x${sim_name}" == "xtagCO"  ||
       "x${sim_name}" == "xcarbon" ||
       "x${sim_name}" == "xTransportTracers" ]]; then
     startdate='20190101'
@@ -947,6 +989,7 @@ fi
 # Assign appropriate file paths and settings in HEMCO_Config.rc
 if [[ ${met} = "ModelE2.1" ]]; then
     RUNDIR_VARS+="RUNDIR_DUSTDEAD_EXT='on '\n"
+    RUNDIR_VARS+="RUNDIR_MEGAN_EXT='on '\n"
     RUNDIR_VARS+="RUNDIR_SEASALT_EXT='on '\n"
     RUNDIR_VARS+="RUNDIR_SOILNOX_EXT='on '\n"
     RUNDIR_VARS+="RUNDIR_OFFLINE_DUST='false'\n"
@@ -959,6 +1002,7 @@ if [[ ${met} = "ModelE2.1" ]]; then
 else
     if [[ "${sim_extra_option}" == "benchmark" ]]; then
 	RUNDIR_VARS+="RUNDIR_DUSTDEAD_EXT='on '\n"
+	RUNDIR_VARS+="RUNDIR_MEGAN_EXT='on '\n"
 	RUNDIR_VARS+="RUNDIR_SEASALT_EXT='on '\n"
 	RUNDIR_VARS+="RUNDIR_SOILNOX_EXT='on '\n"
 	RUNDIR_VARS+="RUNDIR_OFFLINE_DUST='false'\n"
@@ -990,6 +1034,7 @@ else
 	    RUNDIR_VARS+="RUNDIR_OFFLINE_DUST='true '\n"
 	fi
 	RUNDIR_VARS+="RUNDIR_DUSTDEAD_EXT='off'\n"
+	RUNDIR_VARS+="RUNDIR_MEGAN_EXT='off'\n"
 	RUNDIR_VARS+="RUNDIR_SOILNOX_EXT='off'\n"
 	RUNDIR_VARS+="RUNDIR_OFFLINE_BIOVOC='true '\n"
 	RUNDIR_VARS+="RUNDIR_OFFLINE_SOILNOX='true '\n"
@@ -1001,8 +1046,13 @@ fi
 # Replace settings in config files with RUNDIR variables
 #--------------------------------------------------------------------
 
+# Define a subdirectory for rundir configuration files
+rundir_config_dirname=CreateRunDirLogs
+mkdir -p ${rundir}/${rundir_config_dirname}
+
 # Save RUNDIR variables to a file in the rundirConfig folder
-rundir_config_log=${rundir_config}/rundir_vars.txt
+rundir_config_logname=rundir_vars.txt
+rundir_config_log=${rundir}/${rundir_config_dirname}/${rundir_config_logname}
 echo -e "$RUNDIR_VARS" > ${rundir_config_log}
 #sort -o ${rundir_config_log} ${rundir_config_log}
 
@@ -1011,18 +1061,16 @@ echo -e "$RUNDIR_VARS" > ${rundir_config_log}
 ${srcrundir}/init_rd.sh ${rundir_config_log}
 
 #--------------------------------------------------------------------
-# Print run direcory setup info to screen
+# Print run directory setup info to screen
 #--------------------------------------------------------------------
 
-printf "\n  See ${rundir_config}/rundir_vars.txt for run directory settings.\n\n"
-
-printf "\n  -- This run directory has been set up to start on $state_date and"
-printf "\n     restart files for this date are in the Restarts subdirectory.\n"
-printf "\n  -- Update start and end dates in geoschem_config.yml.\n"
-
-printf "\n  -- Add restart files to Restarts as GEOSChem.Restart.YYYYMMDD_HHmmz.nc4.\n"
-printf "\n  -- The default frequency and duration of diagnostics is set to monthly."
-printf "\n     You may modify these settings in HISTORY.rc and HEMCO_Config.rc.\n"
+printf "\n  -- See ${rundir_config_dirname}/${rundir_config_logname} for summary of default run directory settings"
+printf "\n  -- This run directory has been set up to start on ${startdate}"
+printf "\n  -- A restart file for this date has been copied to the Restarts subdirectory"
+printf "\n  -- You may add more restart files using format GEOSChem.Restart.YYYYMMDD_HHmmz.nc4"
+printf "\n  -- Change simulation start and end dates in configuration file geoschem_config.yml"
+printf "\n  -- Default frequency and duration of diagnostics are set to monthly"
+printf "\n  -- Modify diagnostic settings in HISTORY.rc and HEMCO_Config.rc\n"
 
 if [[ "x${nested_sim}" == "xT" ]]; then
     printf "\n  -- Nested-grid simulations use global high-reoslution met fields"
@@ -1033,138 +1081,47 @@ fi
 
 #--------------------------------------------------------------------
 # Copy sample restart file to run directory
+# Bash functions used here are from ./setupForRestarts.sh
 #--------------------------------------------------------------------
 
-if [[ ${met} = "merra2" ]] || [[ ${met} = "geosfp" ]]; then
-
-    # Root path for restarts
-    # Check the Linux Kernel version to see if we are on the AWS cloud.
-    # If we are, define the command to copy the restart file from s3://gcgrid
-    is_aws=$(uname -r | grep aws)
-    if [[ "x${is_aws}" != "x" ]]; then
-	rst_root="s3://gcgrid/GEOSCHEM_RESTARTS"
-	s3_cp="aws s3 cp --request-payer=requester"
-    else
-	rst_root="${GC_DATA_ROOT}/GEOSCHEM_RESTARTS"
-    fi
-
-    if [[ "x${sim_name}" == "xfullchem"     ||
-          "x${sim_name}" == "xaerosol"      ||
-          "x${sim_name}" == "xtagO3"    ]]; then
-
-	if [[ "x${sim_extra_option}" == "xTOMAS15" ]]; then
-	    sample_rst=${rst_root}/v2021-12/GEOSChem.Restart.TOMAS15.${startdate}_0000z.nc4
-	elif [[ "x${sim_extra_option}" == "xTOMAS40" ]]; then
-	    sample_rst=${rst_root}/v2021-12/GEOSChem.Restart.TOMAS40.${startdate}_0000z.nc4
-	else
-	    sample_rst=${rst_root}/GC_14.0.0/GEOSChem.Restart.fullchem.${startdate}_0000z.nc4
-	fi
-
-    elif [[ "x${sim_name}" == "xTransportTracers" ]]; then
-
-	# For TransportTracers, use restart from latest benchmark
-	sample_rst=${rst_root}/GC_14.0.0/GEOSChem.Restart.TransportTracers.${startdate}_0000z.nc4
-
-    elif [[ "x${sim_name}" == "xHg" ]]; then
-
-	# For Hg, point to the restart file w/ KPP species (in v2021-12)
-	sample_rst=${rst_root}/v2021-12/GEOSChem.Restart.${sim_name}.${startdate}_0000z.nc4
-
-    elif [[ "x${sim_name}" == "xPOPs" ]]; then
-
-	# For POPs, the extra option is in the restart file name
-	sample_rst=${rst_root}/v2020-02/GEOSChem.Restart.${sim_name}_${sim_extra_option}.${startdate}_0000z.nc4
-
-    elif [[ "x${sim_name}" == "xmetals" ]]; then
-
-	# For metals, use the extra option is in the restart file name
-	sample_rst=${rst_root}/v2021-06/GEOSChem.Restart.${sim_name}.${startdate}_0000z.nc4
-
-    elif [[ "x${sim_name}" == "xcarbon" ]]; then
-
-	# For carbon, point to the restarts in v2023-01
-	sample_rst=${rst_root}/v2023-01/GEOSChem.Restart.${sim_name}.${startdate}_0000z.nc4
-
-    else
-
-	# For other specialty simulations, use previoiusly saved restarts
-	sample_rst=${rst_root}/v2020-02/GEOSChem.Restart.${sim_name}.${startdate}_0000z.nc4
-
-    fi
-
-elif [[ ${met} = "ModelE2.1" ]]; then
-
-    # Root path for restarts
-    # Check the Linux Kernel version to see if we are on the AWS cloud.
-    # If we are, define the command to copy the restart file from s3://gcgrid
-    is_aws=$(uname -r | grep aws)
-    if [[ "x${is_aws}" != "x" ]]; then
-	rst_root="s3://gcgrid/GCAP2_RESTARTS"
-	s3_cp="aws s3 cp --request-payer=requester"
-    else
-	rst_root="${GC_DATA_ROOT}/GCAP2_RESTARTS"
-    fi
-
-    if [[ "x${sim_name}" == "xfullchem" ]]; then
-
-        # For TOMAS simulations, use restarts provided by the TOMAS team
-        # For other fullchem simulations, use restart the latest 1-yr benchmark
-        if [[ "x${sim_extra_option}" == "xTOMAS15" ]]; then
-    	    sample_rst=${rst_root}/v2020-02/${RUNDIR_GRID_NLEV}L/initial_GCAP2_rst.4x5_TOMAS15.nc4
-        elif [[ "x${sim_extra_option}" == "xTOMAS40" ]]; then
-    	    sample_rst=${rst_root}/v2020-02/${RUNDIR_GRID_NLEV}L/initial_GCAP2_rst.4x5_TOMAS40.nc4
-        else
-    	    sample_rst=${rst_root}/GC_13.0.0/${RUNDIR_GRID_NLEV}L/GCAP2.Restart.fullchem.20190701_0000z.nc4
-        fi
-
-    elif [[ ${sim_name} = "TransportTracers" ]]; then
-
-        # For TransportTracers, use restart from latest 1-year benchmark
-        sample_rst=${rst_root}/GC_13.0.0/${RUNDIR_GRID_NLEV}L/GEOSChem.Restart.TransportTracers.20190101_0000z.nc4
-
-    else
-
-        # For other specialty simulations, use previously saved restarts
-        sample_rst=${rst_root}/v2018-11/${RUNDIR_GRID_NLEV}L/initial_GCAP2_rst.${grid_res}_${sim_name}.nc4
-
-    fi
-
-fi
-
-# Copy the restart file to the run directory (for AWS or on a local server)
-if [[ "x${is_aws}" != "x" ]]; then
-    ${s3_cp} ${sample_rst} ${rundir}/Restarts/GEOSChem.Restart.${startdate}_0000z.nc4 2>/dev/null
-elif [[ -f ${sample_rst} ]]; then
-    cp ${sample_rst} ${rundir}/Restarts/GEOSChem.Restart.${startdate}_0000z.nc4
+# Parse the download_data.yml file, which returns variable declarations
+# prefixed by "RUNDIR_", such as: RUNDIR_restarts_root="GEOSCHEM_RESTARTS"
+if [[ "x${met}" == "xModelE2.1" || "x${met}" == "xModelE2.2" ]]; then
+    config_file="${gcdir}/run/shared/download_data.gcap2.40L.yml"
 else
-    printf "\n  -- The following sample restart provided for this simulation was not found:"
-    printf "\n     ${sample_rst}"
-    printf "\n     You will need to provide this initial restart file or disable"
-    printf "\n     GC_RESTARTS in HEMCO_Config.rc to initialize your simulation"
-    printf "\n     with default background species concentrations.\n"
+    config_file="${gcdir}/run/shared/download_data.yml"
 fi
+config=$(parseYaml "${config_file}" "RUNDIR_")
 
-# Sample restarts for several simulations do not contain all species. For those
-# simulations, print a warning and change the time cycle option in HEMCO config
-# so that we do not force an error if not found (i.e. EFYO --> EY)
-if [[ "x${sim_extra_option}" == "xaciduptake"       ||
-      "x${sim_extra_option}" == "xmarinePOA"        ||
-      "x${sim_extra_option}" == "xcomplexSOA_SVPOA" ||
-      "x${sim_extra_option}" == "xAPM"              ||
-      "x${sim_name}"         == "xPOPs"             ||
-      "x${sim_name}"         == "xtagCH4"           ||
-      "x${sim_name}"         == "xtagO3"        ]]; then
-    old="SpeciesRst_?ALL?    \$YYYY/\$MM/\$DD/\$HH EFYO"
-    new="SpeciesRst_?ALL?    \$YYYY/\$MM/\$DD/\$HH EY  "
-    sed_ie "s|${old}|${new}|" HEMCO_Config.rc
+# Export environment variables to be used by rundir scripts
+for var in ${config[@]}; do
+    setRestartEnvVar "${var}"
+done
 
-    printf "\n  -- The sample restart provided for this simulation may not"
-    printf "\n     contain all species defined in this simulation. Missing"
-    printf "\n     species will be assigned default background concentrations."
-    printf "\n     Check your GEOS-Chem log file for details. As always, it"
-    printf "\n     is recommended that you spin up your simulation to ensure"
-    printf "\n     proper initial conditions.\n"
-fi
+# Root paths for restarts
+# Check the Linux Kernel version to see if we are on the AWS cloud.
+# If we are, define the command to copy the restart file from s3://gcgrid
+is_aws=$(uname -r | grep aws)
+rst_root=$(getRemoteRoot "${is_aws}")
+s3_cp=$(getS3CopyCmd "${is_aws}")
+loc_root="${rundir}/Restarts"
+
+# Copy the proper restart file to the run directory Restarts/ folder
+copyRestartToRunDir "${sim_name}" "${sim_extra_option}" \
+		    "${rst_root}" "${loc_root}"
+
+# Change time cycle flags in HEMCO_Config.rc for those simulations
+# in which the restart files do not contain all species
+setEFYOtoEYinHemcoConfig "${sim_name}" "${sim_extra_option}"
+
+# Unset environment variables used by rundir scripts
+for var in ${config[@]}; do
+    unsetRestartEnvVar "${var}"
+done
+
+#--------------------------------------------------------------------
+# Other setup tasks
+#--------------------------------------------------------------------
 
 # Call function to setup configuration files with settings common between
 # GEOS-Chem Classic and GCHP. This script mainly now adds species to
@@ -1200,7 +1157,7 @@ commit_hash=$(git log -n 1 --pretty=format:"%h")
 cd ${srcrundir}
 
 # Write commit info to a version log
-version_log=${rundir_config}/rundir.version
+version_log=${rundir}/${rundir_config_dirname}/rundir.version
 printf   " This run directory was created with:"        >  ${version_log}
 printf "\n ${srcrundir}/createRunDir.sh.\n"             >> ${version_log}
 printf "\n GEOS-Chem repository version information:\n" >> ${version_log}
@@ -1224,9 +1181,10 @@ while [ "$valid_response" -eq 0 ]; do
 	printf "\n"
 	git init
 	git add *.rc *.sh *.yml *.py geoschem_config.yml getRunInfo
-	[[ -f geoschem.benchmark.run ]] && git add geoschem.benchmark.run
-	[[ -f geoschem.run           ]] && git add geoschem.run
-	[[ -f ${rundir_config_log}   ]] && git add ${rundir_config_log}
+	[[ -f geoschem.benchmark.run         ]] && git add geoschem.benchmark.run
+	[[ -f geoschem.run                   ]] && git add geoschem.run
+	[[ -f HEMCO_Config.rc.gmao_metfields ]] && git add HEMCO_Config.rc.gmao_metfields
+	[[ -f ${rundir_config_log}           ]] && git add ${rundir_config_log}
 	printf " " >> ${version_log}
 	git commit -m "Initial run directory" >> ${version_log}
 	cd ${srcrundir}
@@ -1238,21 +1196,42 @@ while [ "$valid_response" -eq 0 ]; do
     fi
 done
 
+#-----------------------------------------------------------------
+# Ask user whether to build the KPP-standalone box model
+#-----------------------------------------------------------------
+enable_kppsa=""
+if [[ "x${sim_name}" == "xfullchem" ]]; then
+    printf "${thinline}Do you want to build the KPP-Standalone Box Model? (y/n)${thinline}"
+    valid_response=0
+    while [ "$valid_response" -eq 0 ]; do
+	read -p "${USER_PROMPT}" enable_kppsa
+	if [[ "x${enable_kppsa}" == "xy" ]]; then
+	    cp -r ${gcdir}/run/shared/kpp_standalone_interface.yml  ${rundir}
+	    chmod 644 ${rundir}/kpp_standalone_interface.yml
+	    valid_response=1
+	elif [[ "x${enable_kppsa}" = "xn" ]]; then
+	    valid_response=1
+	else
+	    printf "Input not recognized. Try again.\n"
+	fi
+    done
+fi
+
 #---------------------------------------------------------------------------
 # Add reminders to compile with CMake options for simulations that need them
 #---------------------------------------------------------------------------
 hdr="\n>>>> REMINDER: You must compile with options:"
 ftr="<<<<\n"
-
 EXTRA_CMAKE_OPTIONS=""
-[[ "x${sim_name}" == "xcarbon" ]] && EXTRA_CMAKE_OPTIONS="-DMECH=carbon"
-[[ "x${sim_name}" == "xHg"     ]] && EXTRA_CMAKE_OPTIONS="-DMECH=Hg"
+[[ "x${sim_name}" == "xcarbon" ]] && EXTRA_CMAKE_OPTIONS="-DMECH=carbon "
+[[ "x${sim_name}" == "xHg"     ]] && EXTRA_CMAKE_OPTIONS="-DMECH=Hg -DFASTJX=y "
 if [[ "x${sim_name}" == "xfullchem" ]]; then
-    [[ "x${sim_extra_option}" == "xAPM"     ]] && EXTRA_CMAKE_OPTIONS="-DAPM=y"
-    [[ "x${sim_extra_option}" == "xRRTMG"   ]] && EXTRA_CMAKE_OPTIONS="-DRRTMG=y"
-    [[ "x${sim_extra_option}" == "xTOMAS15" ]] && EXTRA_CMAKE_OPTIONS="-DTOMAS=y -DTOMAS_BINS=15"
-    [[ "x${sim_extra_option}" == "xTOMAS40" ]] && EXTRA_CMAKE_OPTIONS="-DTOMAS=y -DTOMAS_BINS=40"
+    [[ "x${sim_extra_option}" == "xAPM"     ]] && EXTRA_CMAKE_OPTIONS="-DAPM=y "
+    [[ "x${sim_extra_option}" == "xRRTMG"   ]] && EXTRA_CMAKE_OPTIONS="-DRRTMG=y "
+    [[ "x${sim_extra_option}" == "xTOMAS15" ]] && EXTRA_CMAKE_OPTIONS="-DTOMAS=y -DTOMAS_BINS=15 "
+    [[ "x${sim_extra_option}" == "xTOMAS40" ]] && EXTRA_CMAKE_OPTIONS="-DTOMAS=y -DTOMAS_BINS=40 "
 fi
+[[ "x${enable_kppsa}" == "xy" ]] && EXTRA_CMAKE_OPTIONS+="-DKPPSA=y"
 
 # Add to RUNDIR_VARS
 RUNDIR_VARS+="EXTRA_CMAKE_OPTIONS=${EXTRA_CMAKE_OPTIONS}"
@@ -1280,7 +1259,7 @@ unset msg
 printf "\n\n IMPORTANT: ONLY USE THESE RUNDIR SETTINGS WITH THIS COMMIT!\n" >> ${version_log}
 
 # Add a "# " characters to the front of each line so we can use
-# it as a comment heading for rundir_vars.txt
+# it as a comment heading for ${rundir_config_logname}
 sed 's/^/# /' ${version_log} > tmp.txt
 mv tmp.txt ${version_log}
 
@@ -1296,9 +1275,16 @@ if [[ "x${enable_git}" == "xy" ]]; then
     if [[ -f ${rundir_config_log} ]]; then
 	cd ${rundir}
 	git add ${rundir_config_log}
-	git commit -m "Update header of rundirConfig/rundir_vars.txt" > /dev/null
+	git commit -m "Update header of ${rundir_config_dirname}/${rundir_config_logname}" > /dev/null
 	cd ${srcrundir}
     fi
+fi
+
+#-----------------------------------------------------------------
+# Create and populate warnings file
+#-----------------------------------------------------------------
+if [[ $met == "geosfp" ]]; then
+   echo -e ${fp_msg} > ${rundir}/warnings.txt
 fi
 
 #-----------------------------------------------------------------

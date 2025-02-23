@@ -1583,7 +1583,8 @@ CONTAINS
    USE State_Grid_Mod,    ONLY : GrdState
    USE State_Met_Mod,     ONLY : MetState
    USE Time_Mod,          ONLY : Expand_Date
-   USE UnitConv_Mod,      ONLY : Convert_Spc_Units
+   USE Timers_Mod,        ONLY : Timer_End, Timer_Start
+   USE UnitConv_Mod
 #ifdef APM
    USE APM_Init_Mod,      ONLY : APMIDS
 #endif
@@ -1613,6 +1614,7 @@ CONTAINS
 ! !LOCAL VARIABLES:
 !
    INTEGER                   :: I, J, L, M, N      ! lon, lat, lev, indexes
+   INTEGER                   :: previous_units
    LOGICAL                   :: FOUND              ! Found in restart file?
    CHARACTER(LEN=60)         :: Prefix             ! utility string
    CHARACTER(LEN=255)        :: LOC                ! routine location
@@ -1620,7 +1622,6 @@ CONTAINS
    CHARACTER(LEN=255)        :: v_name             ! variable name
    REAL(fp)                  :: MW_g               ! species molecular weight
    REAL(fp)                  :: SMALL_NUM          ! small number threshold
-   CHARACTER(LEN=63)         :: OrigUnit
 
    ! Temporary arrays and pointers
    REAL*4,  TARGET           :: Temp2D(State_Grid%NX,State_Grid%NY)
@@ -1895,13 +1896,13 @@ CONTAINS
 #endif
       ENDIF
 
+      ! Set the initial unit flags
+      State_Chm%Species(N)%Units = KG_SPECIES_PER_KG_DRY_AIR
+
       ! Free pointer
       SpcInfo => NULL()
 
    ENDDO
-
-   ! Set species units
-   State_Chm%Spc_Units = 'kg/kg dry'
 
    ! If in debug mode, print out species min and max in [molec/cm3]
    IF ( Input_Opt%Verbose ) THEN
@@ -1909,14 +1910,32 @@ CONTAINS
       ! Convert units
       PRINT *, " "
       PRINT *, "Species min and max in molec/cm3"
-      CALL Convert_Spc_Units( Input_Opt, State_Chm, State_Grid, State_Met, &
-                              'molec/cm3', RC, OrigUnit=OrigUnit )
+
+      ! Halt HEMCO timer (so that unit conv can be timed separately)
+      IF ( Input_Opt%useTimers ) THEN
+         CALL Timer_End( "HEMCO", RC )
+      ENDIF
+
+      ! Convert units
+      CALL Convert_Spc_Units(                                                &
+           Input_Opt      = Input_Opt,                                       &
+           State_Chm      = State_Chm,                                       &
+           State_Grid     = State_Grid,                                      &
+           State_Met      = State_Met,                                       &
+           new_units      = MOLECULES_SPECIES_PER_CM3,                       &
+           previous_units = previous_units,                                  &
+           RC             = RC                                              )
 
       ! Trap error
       IF ( RC /= GC_SUCCESS ) THEN
          Msg = 'Error returned from Convert_Spc_Units, call #1!'
          CALL GC_Error( Msg, RC, Loc )
          RETURN
+      ENDIF
+
+      ! Start HEMCO timer again
+      IF ( Input_Opt%useTimers ) THEN
+         CALL Timer_Start( "HEMCO", RC )
       ENDIF
 
       ! Print values
@@ -1930,9 +1949,19 @@ CONTAINS
          SpcInfo => NULL()
       ENDDO
 
+      ! Halt HEMCO timer (so that unit conv can be timed separately)
+      IF ( Input_Opt%useTimers ) THEN
+         CALL Timer_End( "HEMCO", RC )
+      ENDIF
+
       ! Convert units back
-      CALL Convert_Spc_Units( Input_Opt, State_Chm, State_Grid, State_Met, &
-                              OrigUnit,  RC )
+      CALL Convert_Spc_Units(                                                &
+           Input_Opt  = Input_Opt,                                           &
+           State_Chm  = State_Chm,                                           &
+           State_Grid = State_Grid,                                          &
+           State_Met  = State_Met,                                           &
+           new_units  = previous_units,                                      &
+           RC         = RC                                                  )
 
       ! Trap error
       IF ( RC /= GC_SUCCESS ) THEN
@@ -1941,6 +1970,10 @@ CONTAINS
          RETURN
       ENDIF
 
+      ! Start HEMCO timer again
+      IF ( Input_Opt%useTimers ) THEN
+         CALL Timer_Start( "HEMCO", RC )
+      ENDIF
    ENDIF
 
    !=========================================================================
