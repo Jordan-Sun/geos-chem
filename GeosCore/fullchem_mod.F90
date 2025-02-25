@@ -1126,7 +1126,26 @@ CONTAINS
     ! Since we are only swapping columns, the number of cells in the balanced domain is the same as the local domain
     this_PET = Input_Opt%thisCPU
 
-    ! Skip load balancing if we are not moving any cells, i.e. next_PET = -1
+    ! Skip asynchronous receive if we are not getting any cells, i.e. prev_PET = -1
+    IF (reassignment_data(interval)%prev_PET /= -1) THEN
+        ! Start asynchronous receive
+        CALL MPI_Irecv( &
+            C_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
+            reassignment_data(interval)%prev_PET, 0, &
+            Input_Opt%mpiComm, recv_requests(1), RC)
+        CALL MPI_Irecv( &
+            RCONST_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
+            reassignment_data(interval)%prev_PET, 1, &
+            Input_Opt%mpiComm, recv_requests(2), RC)
+        CALL MPI_Irecv( &
+            I_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
+            reassignment_data(interval)%prev_PET, 2, &
+            Input_Opt%mpiComm, recv_requests(3), RC)
+        CALL MPI_Irecv( &
+            R_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
+            reassignment_data(interval)%prev_PET, 3, &
+            Input_Opt%mpiComm, recv_requests(4), RC)
+    ! Skip load balancing if we are not sending any cells, i.e. next_PET = -1
     IF (reassignment_data(interval)%next_PET /= -1) THEN
 #ifdef HIRES_TIMER
         TimerStart = rdtsc()
@@ -1172,23 +1191,6 @@ CONTAINS
         ! Write both times to timer log file
         WRITE(unit_number, *) Interval, 'ForwardIsend', TimerStart, TimerEnd
 #endif
-        ! Start asynchronous receive
-        CALL MPI_Irecv( &
-            C_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NSPEC, MPI_DOUBLE_PRECISION, &
-            reassignment_data(interval)%prev_PET, 0, &
-            Input_Opt%mpiComm, recv_requests(1), RC)
-        CALL MPI_Irecv( &
-            RCONST_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * NREACT, MPI_DOUBLE_PRECISION, &
-            reassignment_data(interval)%prev_PET, 1, &
-            Input_Opt%mpiComm, recv_requests(2), RC)
-        CALL MPI_Irecv( &
-            I_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_INTEGER, &
-            reassignment_data(interval)%prev_PET, 2, &
-            Input_Opt%mpiComm, recv_requests(3), RC)
-        CALL MPI_Irecv( &
-            R_recv(1,1), State_Grid%NZ * reassignment_data(interval)%NCELL_moving * 20, MPI_DOUBLE_PRECISION, &
-            reassignment_data(interval)%prev_PET, 3, &
-            Input_Opt%mpiComm, recv_requests(4), RC)
     ENDIF ! load balancing
 #endif
 
