@@ -1283,6 +1283,24 @@ CONTAINS
        RSTATE_1D(:,I_CELL)  = RSTATE(:)
        ISTATUS_1D(:,I_CELL) = ISTATUS(:)
 
+
+! #if defined( MODEL_GEOS )
+!        ! Mark integration as erroneous if negative concentrations so that it will be
+!        ! repeated below (cakelle2, 2023/10/26)
+!        IF ( IERR >= 0 .AND. Input_Opt%KppCheckNegatives >= 0 ) THEN
+!           IF ( ( Input_Opt%KppCheckNegatives==0 .AND. State_Met%InStratMeso(I,J,L) ) .OR. &
+!                ( L > (  State_Grid%NZ - Input_Opt%KppCheckNegatives) ) ) THEN
+!              IF ( ANY(C < 0.0_dp) ) THEN
+!                 IERR = -999
+!                 ! Include negative concentration boxes within error box diagnostic
+!                 IF ( State_Diag%Archive_KppError ) THEN
+!                    State_Diag%KppError(I,J,L) = State_Diag%KppError(I,J,L) + 1.0
+!                 ENDIF
+!              ENDIF
+!           ENDIF
+!        ENDIF
+! #endif
+
        ! Print grid box indices to screen if integrate failed
        IF ( IERR < 0 ) THEN
 
@@ -1297,89 +1315,12 @@ CONTAINS
              ENDIF
           ENDIF
 
-#if defined( MODEL_GEOS ) || defined( MODEL_WRF ) || defined( MODEL_CESM )
-          ! Keep track of number of error boxes
-          IF ( State_Diag%Archive_KppError ) THEN
-             State_Diag%KppError(I,J,L) = State_Diag%KppError(I,J,L) + 1.0
-          ENDIF
-#endif
-       ENDIF
-
-#if defined( MODEL_GEOS )
-       ! Mark integration as erroneous if negative concentrations so that it will be
-       ! repeated below (cakelle2, 2023/10/26)
-       IF ( IERR >= 0 .AND. Input_Opt%KppCheckNegatives >= 0 ) THEN
-          IF ( ( Input_Opt%KppCheckNegatives==0 .AND. State_Met%InStratMeso(I,J,L) ) .OR. &
-               ( L > (  State_Grid%NZ - Input_Opt%KppCheckNegatives) ) ) THEN
-             IF ( ANY(C < 0.0_dp) ) THEN
-                IERR = -999
-                ! Include negative concentration boxes within error box diagnostic
-                IF ( State_Diag%Archive_KppError ) THEN
-                   State_Diag%KppError(I,J,L) = State_Diag%KppError(I,J,L) + 1.0
-                ENDIF
-             ENDIF
-          ENDIF
-       ENDIF
-#endif
-
-       !=====================================================================
-       ! HISTORY: Archive KPP solver diagnostics
-       !
-       ! !TODO: Abstract this into a separate routine
-       !=====================================================================
-       IF ( State_Diag%Archive_KppDiags ) THEN
-
-          ! Check for negative concentrations after first integration
-          IF ( State_Diag%Archive_KppNegatives0 ) THEN
-             State_Diag%KppNegatives0(I,J,L) = REAL( COUNT( C < 0.0_dp ), KIND=4 )
-          ENDIF
-          
-          ! # of integrator calls
-          IF ( State_Diag%Archive_KppIntCounts ) THEN
-             State_Diag%KppIntCounts(I,J,L) = ISTATUS(1)
-          ENDIF
-
-          ! # of times Jacobian was constructed
-          IF ( State_Diag%Archive_KppJacCounts ) THEN
-             State_Diag%KppJacCounts(I,J,L) = ISTATUS(2)
-          ENDIF
-
-          ! # of internal timesteps
-          IF ( State_Diag%Archive_KppTotSteps ) THEN
-             State_Diag%KppTotSteps(I,J,L) = ISTATUS(3)
-          ENDIF
-
-          ! # of accepted internal timesteps
-          IF ( State_Diag%Archive_KppAccSteps ) THEN
-             State_Diag%KppAccSteps(I,J,L) = ISTATUS(4)
-          ENDIF
-
-          ! # of rejected internal timesteps
-          IF ( State_Diag%Archive_KppRejSteps ) THEN
-             State_Diag%KppRejSteps(I,J,L) = ISTATUS(5)
-          ENDIF
-
-          ! # of LU-decompositions
-          IF ( State_Diag%Archive_KppLuDecomps ) THEN
-             State_Diag%KppLuDecomps(I,J,L) = ISTATUS(6)
-          ENDIF
-
-          ! # of forward and backwards substitutions
-          IF ( State_Diag%Archive_KppSubsts ) THEN
-             State_Diag%KppSubsts(I,J,L) = ISTATUS(7)
-          ENDIF
-
-          ! # of singular-matrix decompositions
-          IF ( State_Diag%Archive_KppSmDecomps ) THEN
-             State_Diag%KppSmDecomps(I,J,L) = ISTATUS(8)
-          ENDIF
-
-          ! Update autoreduce solver statistics
-          ! (only if the autoreduction is turned on)
-          IF ( Input_Opt%Use_AutoReduce ) THEN
-             CALL fullchem_AR_UpdateKppDiags( I, J, L, RSTATE, State_Diag )
-          ENDIF
-       ENDIF
+! #if defined( MODEL_GEOS ) || defined( MODEL_WRF ) || defined( MODEL_CESM )
+!           ! Keep track of number of error boxes
+!           IF ( State_Diag%Archive_KppError ) THEN
+!              State_Diag%KppError(I,J,L) = State_Diag%KppError(I,J,L) + 1.0
+!           ENDIF
+! #endif
 
           !=====================================================================
           ! Try another time if it failed
@@ -1631,6 +1572,11 @@ CONTAINS
        ! !TODO: Abstract this into a separate routine
        !=====================================================================
        IF ( State_Diag%Archive_KppDiags ) THEN
+
+          ! Check for negative concentrations after first integration
+          IF ( State_Diag%Archive_KppNegatives0 ) THEN
+             State_Diag%KppNegatives0(I,J,L) = REAL( COUNT( C < 0.0_dp ), KIND=4 )
+          ENDIF
 
           ! # of integrator calls
           IF ( State_Diag%Archive_KppIntCounts ) THEN
