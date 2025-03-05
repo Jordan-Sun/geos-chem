@@ -287,6 +287,8 @@ CONTAINS
        IF (State_Diag%Archive_KppLuDecomps) State_Diag%KppLuDecomps   = 0.0_f4
        IF (State_Diag%Archive_KppSubsts   ) State_Diag%KppSubsts      = 0.0_f4
        IF (State_Diag%Archive_KppSmDecomps) State_Diag%KppSmDecomps   = 0.0_f4
+       IF (State_Diag%Archive_KppRank) State_Diag%KppRank             = 0.0_f4
+       IF (State_Diag%Archive_KppIndexOnRank) State_Diag%KppIndexOnRank= 0.0_f4
        IF (State_Diag%Archive_KppAutoReducerNVAR)                            &
                                       State_Diag%KppAutoReducerNVAR   = 0.0_f4
        IF (State_Diag%Archive_KppcNONZERO)  State_Diag%KppcNONZERO    = 0.0_f4
@@ -1123,6 +1125,16 @@ CONTAINS
           ! # of singular-matrix decompositions
           IF ( State_Diag%Archive_KppSmDecomps ) THEN
              State_Diag%KppSmDecomps(I,J,L) = ISTATUS(8)
+          ENDIF
+
+          ! rank of column
+          IF ( State_Diag%Archive_KppRank ) THEN
+             State_Diag%KppRank(I,J,L) = Input_Opt%thisCPU
+          ENDIF
+
+          ! index of column on rank
+          IF ( State_Diag%Archive_KppIndexOnRank ) THEN
+             State_Diag%KppIndexOnRank(I,J,L) = N
           ENDIF
 
           ! Update autoreduce solver statistics
