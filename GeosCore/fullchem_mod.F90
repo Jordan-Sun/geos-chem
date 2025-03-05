@@ -1127,16 +1127,6 @@ CONTAINS
              State_Diag%KppSmDecomps(I,J,L) = ISTATUS(8)
           ENDIF
 
-          ! rank of column
-          IF ( State_Diag%Archive_KppRank ) THEN
-             State_Diag%KppRank(I,J,L) = Input_Opt%thisCPU
-          ENDIF
-
-          ! index of column on rank
-          IF ( State_Diag%Archive_KppIndexOnRank ) THEN
-             State_Diag%KppIndexOnRank(I,J,L) = N
-          ENDIF
-
           ! Update autoreduce solver statistics
           ! (only if the autoreduction is turned on)
           IF ( Input_Opt%Use_AutoReduce ) THEN
@@ -1309,6 +1299,16 @@ CONTAINS
        IF ( State_Diag%Archive_KppTime ) THEN
           call cpu_time(TimeEnd)
           State_Diag%KppTime(I,J,L) = TimeEnd - TimeStart
+       ENDIF
+       
+       ! rank of column
+       IF ( State_Diag%Archive_KppRank ) THEN
+       	   State_Diag%KppRank(I,J,L) = Input_Opt%thisCPU
+       ENDIF
+
+       ! index of column on rank
+       IF ( State_Diag%Archive_KppIndexOnRank ) THEN
+            State_Diag%KppIndexOnRank(I,J,L) = L * State_Grid%NX * State_Grid%NY + J * State_Grid%NX + I
        ENDIF
 
        ! Write chemical state to file for the kpp standalone interface
