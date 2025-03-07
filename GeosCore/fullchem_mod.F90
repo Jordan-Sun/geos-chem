@@ -129,6 +129,9 @@ MODULE FullChem_Mod
   ! Stores the previous and next PETs for each interval, as well as the indices of the columns to swap.
   INTEGER,  PARAMETER :: unit_number = 10
   TYPE(ReassignmentData), ALLOCATABLE :: reassignment_data(:)
+  ! Whether to enable the reassignment of cells to other processors.
+  ! Todo: Read from HISTORY.rc file.
+  LOGICAL :: reassign_cells = .FALSE.
   ! Counter to keep track of the current interval.
   INTEGER :: interval
 
@@ -1133,6 +1136,8 @@ CONTAINS
     this_PET = Input_Opt%thisCPU
 
     ! Skip load balancing if we are not moving any cells, i.e. next_PET = -1
+    IF ( reassign_cells ) THEN
+      
     IF (reassignment_data(interval)%next_PET /= -1) THEN
 #ifdef HIRES_TIMER
         TimerStart = rdtsc()
@@ -1220,6 +1225,7 @@ CONTAINS
         ! Always time the inbetween section
         TimerStart = rdtsc()
 #endif
+    END IF
 
 #endif
     !$OMP PARALLEL DO                                                        &
@@ -1445,6 +1451,9 @@ CONTAINS
     ENDDO
 
 #ifdef MODEL_GCHPCTM
+
+    IF ( reassign_cells ) THEN
+
 #ifdef HIRES_TIMER
     ! Always time the inbetween section
     TimerEnd = rdtsc()
@@ -1537,6 +1546,8 @@ CONTAINS
 #endif
     ENDIF
 #endif
+
+    END IF
     
     DO L = 1, State_Grid%NZ
     DO J = 1, State_Grid%NY
@@ -3372,75 +3383,77 @@ CONTAINS
        RETURN
     ENDIF
 
-    ! Read from mapping file to determine which cells we should reassign and to which PET
-    CALL get_environment_variable("HOME", HomeDir)
-    ! Use write to concatenate strings for the reassignment file path
-    WRITE(AssignmentPath, '(A, A, I0, A)') TRIM(HomeDir), '/reassignment/restricted/rank_', Input_Opt%thisCPU, '.csv'
-    ! Open the reassignment file
-    OPEN(unit=unit_number, file=AssignmentPath, status='old', action='read', iostat=RC)
-    IF (RC /= 0) THEN
-        CALL GC_Error( 'Error opening reassignment file', RC, ThisLoc )
-        RETURN
-    END IF
-    ! Read the first line which should be the number of intervals
-    READ(unit_number, *, IOSTAT=RC) nIntervals, lineLength
-    IF (RC /= 0) THEN
-        CALL GC_Error( 'Error reading reassignment file', RC, ThisLoc )
-        RETURN
-    END IF
-#ifdef BALANCE_DEBUG
-    ! if debug, print how many intervals we have
-    PRINT *, "Number of intervals: ", nIntervals, " line length: ", lineLength
-#endif
-    ! Allocate the reassignment data array
-    ALLOCATE(reassignment_data(nIntervals), STAT=RC)
-    IF ( RC /= GC_SUCCESS ) Then
-        CALL GC_Error( 'Failed to allocate reassignment_data', RC, ThisLoc )
-        RETURN
-    END IF
-    ! Allocate the line buffer, plus 1 for the null terminator.
-    ALLOCATE(CHARACTER(LEN=lineLength + 1) :: line)
-    IF ( RC /= GC_SUCCESS ) Then
-        CALL GC_Error( 'Failed to allocate line buffer', RC, ThisLoc )
-        RETURN
-    END IF
-    ! Read all the reassignment at once in the initialization phase to avoid reading multiple times, which might cause lag.
-    DO N = 1, nIntervals
-        READ(unit_number, *, IOSTAT=RC) reassignment_data(N)%prev_PET, reassignment_data(N)%next_PET, reassignment_data(N)%NCELL_moving
+    IF ( reassign_cells ) THEN
+        ! Read from mapping file to determine which cells we should reassign and to which PET
+        CALL get_environment_variable("HOME", HomeDir)
+        ! Use write to concatenate strings for the reassignment file path
+        WRITE(AssignmentPath, '(A, A, I0, A)') TRIM(HomeDir), '/reassignment/restricted/rank_', Input_Opt%thisCPU, '.csv'
+        ! Open the reassignment file
+        OPEN(unit=unit_number, file=AssignmentPath, status='old', action='read', iostat=RC)
         IF (RC /= 0) THEN
-            CALL GC_Error('Error reading reassignment file', RC, ThisLoc)
+            CALL GC_Error( 'Error opening reassignment file', RC, ThisLoc )
+            RETURN
+        END IF
+        ! Read the first line which should be the number of intervals
+        READ(unit_number, *, IOSTAT=RC) nIntervals, lineLength
+        IF (RC /= 0) THEN
+            CALL GC_Error( 'Error reading reassignment file', RC, ThisLoc )
             RETURN
         END IF
 #ifdef BALANCE_DEBUG
-        ! debug print contents of prev_PET, next_PET, and NCELL_moving of PET 0
-        IF (Input_Opt%thisCPU == 0) THEN
-            PRINT *, "Interval ", N, " prev_PET: ", reassignment_data(N)%prev_PET, " next_PET: ", reassignment_data(N)%next_PET, " NCELL_moving: ", reassignment_data(N)%NCELL_moving
-        END IF
+        ! if debug, print how many intervals we have
+        PRINT *, "Number of intervals: ", nIntervals, " line length: ", lineLength
 #endif
-        ! Skip if next_PET is -1
-        IF (reassignment_data(N)%next_PET /= -1) THEN
-            ! Allocate the swap indices array to be the same length as NCELL_moving
-            Allocate(reassignment_data(N)%swap_indices(reassignment_data(N)%NCELL_moving), STAT=RC)
-            IF ( RC /= GC_SUCCESS ) Then
-                CALL GC_Error( 'Failed to allocate swap_indices', RC, ThisLoc)
-                RETURN
-            END IF
-            ! Read the swap indices from the next line
-            READ(unit_number, *, IOSTAT=RC) reassignment_data(N)%swap_indices
+    ! Allocate the reassignment data array
+        ALLOCATE(reassignment_data(nIntervals), STAT=RC)
+        IF ( RC /= GC_SUCCESS ) Then
+            CALL GC_Error( 'Failed to allocate reassignment_data', RC, ThisLoc )
+            RETURN
+        END IF
+        ! Allocate the line buffer, plus 1 for the null terminator.
+        ALLOCATE(CHARACTER(LEN=lineLength + 1) :: line)
+        IF ( RC /= GC_SUCCESS ) Then
+            CALL GC_Error( 'Failed to allocate line buffer', RC, ThisLoc )
+            RETURN
+        END IF
+        ! Read all the reassignment at once in the initialization phase to avoid reading multiple times, which might cause lag.
+        DO N = 1, nIntervals
+            READ(unit_number, *, IOSTAT=RC) reassignment_data(N)%prev_PET, reassignment_data(N)%next_PET, reassignment_data(N)%NCELL_moving
             IF (RC /= 0) THEN
                 CALL GC_Error('Error reading reassignment file', RC, ThisLoc)
                 RETURN
             END IF
 #ifdef BALANCE_DEBUG
-            ! debug print contents of swap indices of PET 0
+            ! debug print contents of prev_PET, next_PET, and NCELL_moving of PET 0
             IF (Input_Opt%thisCPU == 0) THEN
-                PRINT *, "Interval ", N, " swap_indices: ", reassignment_data(N)%swap_indices
+                PRINT *, "Interval ", N, " prev_PET: ", reassignment_data(N)%prev_PET, " next_PET: ", reassignment_data(N)%next_PET, " NCELL_moving: ", reassignment_data(N)%NCELL_moving
             END IF
 #endif
-        END IF
-    END DO
+            ! Skip if next_PET is -1
+            IF (reassignment_data(N)%next_PET /= -1) THEN
+                ! Allocate the swap indices array to be the same length as NCELL_moving
+                Allocate(reassignment_data(N)%swap_indices(reassignment_data(N)%NCELL_moving), STAT=RC)
+                IF ( RC /= GC_SUCCESS ) Then
+                    CALL GC_Error( 'Failed to allocate swap_indices', RC, ThisLoc)
+                    RETURN
+                END IF
+                ! Read the swap indices from the next line
+                READ(unit_number, *, IOSTAT=RC) reassignment_data(N)%swap_indices
+                IF (RC /= 0) THEN
+                    CALL GC_Error('Error reading reassignment file', RC, ThisLoc)
+                    RETURN
+                END IF
+#ifdef BALANCE_DEBUG
+                ! debug print contents of swap indices of PET 0
+                IF (Input_Opt%thisCPU == 0) THEN
+                    PRINT *, "Interval ", N, " swap_indices: ", reassignment_data(N)%swap_indices
+                END IF
+#endif
+            END IF
+        END DO
 
-    CLOSE(unit_number)
+        CLOSE(unit_number)
+    END IF
 
     ! If timer is enabled, open a log file to write the timer data
 #ifdef HIRES_TIMER
@@ -3453,7 +3466,6 @@ CONTAINS
         RETURN
     END IF
 #endif
-
 
     ! What is the largest number of cells any one PET should handle?
     ! TODO: add MPI logic to figure this out
