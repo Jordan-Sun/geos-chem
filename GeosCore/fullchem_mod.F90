@@ -131,7 +131,7 @@ MODULE FullChem_Mod
   TYPE(ReassignmentData), ALLOCATABLE :: reassignment_data(:)
   ! Whether to enable the reassignment of cells to other processors.
   ! Todo: Read from HISTORY.rc file.
-  LOGICAL :: reassign_cells = .FALSE.
+  LOGICAL :: reassign_cells = .TRUE.
   ! Counter to keep track of the current interval.
   INTEGER :: interval
 
