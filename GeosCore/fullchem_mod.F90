@@ -133,7 +133,7 @@ MODULE FullChem_Mod
   TYPE(ReassignmentData), ALLOCATABLE :: reassignment_data(:)
   ! Whether to enable the reassignment of cells to other processors.
   ! Todo: Read from HISTORY.rc file.
-  LOGICAL :: reassign_cells = .TRUE.
+  LOGICAL :: reassign_cells = .FALSE.
   ! Counter to keep track of the current interval.
   INTEGER :: interval
 
@@ -287,8 +287,11 @@ CONTAINS
     ! Sink rate for artificial UT/LS sink
     REAL(dp)               :: ScaleCESMLossRate
 #endif
-#ifdef HIRES_TIMER
+
+#if defined( HIRES_TIMER )
     INTEGER(8)             :: TimerStart, TimerEnd
+#elif defined( MPI_TIMER )
+    REAL(fp)               :: TimerStart, TimerEnd
 #endif
 
     ! Grid box integration time diagnostic
@@ -314,6 +317,18 @@ CONTAINS
     ! Do_FullChem begins here!
     ! NOTE: FlexChem timer is started in DO_CHEMISTRY (the calling routine)
     !========================================================================
+
+#ifdef MPI_TIMER
+    ! Call MPI barrier to measure the wall clock time for do_fullchem subroutine
+    CALL MPI_Barrier( MPI_COMM_WORLD, RC )
+    IF ( RC /= MPI_SUCCESS ) THEN
+       ErrMsg = 'MPI_Barrier failed in do_fullchem!'
+       CALL GC_Error( ErrMsg, RC, 'fullchem_mod.F90')
+       RETURN
+    ENDIF
+    ! Timer start stores the time for the entire subroutine, and Time start stores the time for the KPP integration
+    TimerStart = MPI_Wtime()
+#endif
 
     ! Initialize
     RC         =  GC_SUCCESS
@@ -2051,6 +2066,19 @@ CONTAINS
     ! Set FIRSTCHEM = .FALSE. -- we have gone thru one chem step
     FIRSTCHEM = .FALSE.
 
+#ifdef MPI_TIMER
+    ! Wait for all processes to finish before returning
+    CALL MPI_Barrier( Input_Opt%mpiComm, RC )
+    IF ( RC /= MPI_SUCCESS ) THEN
+       ErrMsg = 'MPI_Barrier error in fullchem_mod.F90!'
+       CALL GC_Error( ErrMsg, RC, ThisLoc )
+       RETURN
+    ENDIF
+    TimerEnd = MPI_Wtime()
+    ! Write both times to timer log file
+    WRITE(unit_number, *) Interval, 'FullChem', TimerStart, TimerEnd
+#endif
+
   END SUBROUTINE Do_FullChem
 !EOC
 #ifdef TOMAS
@@ -3469,7 +3497,7 @@ CONTAINS
     END IF
 
     ! If timer is enabled, open a log file to write the timer data
-#ifdef HIRES_TIMER || MPI_TIMER
+#if defined(HIRES_TIMER) || defined(MPI_TIMER)
     ! Use write to concatenate strings for the log file path
     WRITE(AssignmentPath, '(A, A, I0, A)') TRIM(HomeDir), '/timer/timer_', Input_Opt%thisCPU, '.log'
     ! Open the log file
@@ -3477,6 +3505,9 @@ CONTAINS
     IF (RC /= 0) THEN
         CALL GC_Error( 'Error opening timer log file', RC, ThisLoc )
         RETURN
+    ELSE
+        ! Print path to console
+        PRINT *, "Writing timer log to: ", TRIM(AssignmentPath)
     END IF
 #endif
 
@@ -3758,7 +3789,7 @@ CONTAINS
        IF ( RC /= GC_SUCCESS ) RETURN
     ENDIF
 
-#ifdef HIRES_TIMER || MPI_TIMER
+#if defined(HIRES_TIMER) || defined(MPI_TIMER)
     ! Close the timer log file
     CLOSE(unit_number)
 #endif
