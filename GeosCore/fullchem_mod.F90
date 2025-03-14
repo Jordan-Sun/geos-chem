@@ -3142,7 +3142,8 @@ CONTAINS
     INTEGER            :: KppId,    N,       nIntervals, lineLength
 
     ! Strings
-    CHARACTER(LEN=255) :: ErrMsg,   ThisLoc, HomeDir, AssignmentPath
+    CHARACTER(LEN=255) :: ErrMsg,   ThisLoc
+    CHARACTER(LEN=511) :: HomeDir,  AssignmentPath
     ! Dynamic line buffer allocated after reading in the maximum line length from the first line of the file
     CHARACTER(LEN=:),  ALLOCATABLE :: line
 
