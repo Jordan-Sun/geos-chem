@@ -11,7 +11,9 @@
 !\\
 ! !INTERFACE:
 !
+! Only define HIRES_TIMER or MPI_TIMER, never both.
 ! #define HIRES_TIMER
+#define MPI_TIMER
 MODULE FullChem_Mod
 !
 ! !USES:
@@ -1137,7 +1139,6 @@ CONTAINS
 
     ! Skip load balancing if we are not moving any cells, i.e. next_PET = -1
     IF ( reassign_cells ) THEN
-      
     IF (reassignment_data(interval)%next_PET /= -1) THEN
 #ifdef HIRES_TIMER
         TimerStart = rdtsc()
@@ -1220,12 +1221,18 @@ CONTAINS
         ! Write both times to timer log file
         WRITE(unit_number, *) Interval, 'ForwardUnpacking', TimerStart, TimerEnd
 #endif
-    ENDIF
-#ifdef HIRES_TIMER
-        ! Always time the inbetween section
-        TimerStart = rdtsc()
-#endif
     END IF
+    END IF
+
+#ifdef HIRES_TIMER
+    ! Always time the inbetween section
+    TimerStart = rdtsc()
+#endif
+
+#ifdef MPI_TIMER
+    ! Time the KPP main loop
+    TimeStart = MPI_Wtime()
+#endif
 
 #endif
     !$OMP PARALLEL DO                                                        &
@@ -1452,7 +1459,11 @@ CONTAINS
 
 #ifdef MODEL_GCHPCTM
 
-    IF ( reassign_cells ) THEN
+#ifdef MPI_TIMER
+    TimeEnd = MPI_Wtime()
+    ! Write both times to timer log file
+    WRITE(unit_number, *) Interval, 'KppLoop', TimeStart, TimeEnd
+#endif
 
 #ifdef HIRES_TIMER
     ! Always time the inbetween section
@@ -1460,6 +1471,8 @@ CONTAINS
     ! Write both times to timer log file
     WRITE(unit_number, *) Interval, 'Inbetween', TimerStart, TimerEnd
 #endif
+
+    IF ( reassign_cells ) THEN
     ! Skip reverse load balancing if we are not moving any cells, i.e. target_PET = -1
     IF (reassignment_data(interval)%next_PET /= -1) THEN
 #ifdef HIRES_TIMER
@@ -3456,7 +3469,7 @@ CONTAINS
     END IF
 
     ! If timer is enabled, open a log file to write the timer data
-#ifdef HIRES_TIMER
+#ifdef HIRES_TIMER || MPI_TIMER
     ! Use write to concatenate strings for the log file path
     WRITE(AssignmentPath, '(A, A, I0, A)') TRIM(HomeDir), '/timer/timer_', Input_Opt%thisCPU, '.log'
     ! Open the log file
@@ -3745,7 +3758,7 @@ CONTAINS
        IF ( RC /= GC_SUCCESS ) RETURN
     ENDIF
 
-#ifdef HIRES_TIMER
+#ifdef HIRES_TIMER || MPI_TIMER
     ! Close the timer log file
     CLOSE(unit_number)
 #endif
