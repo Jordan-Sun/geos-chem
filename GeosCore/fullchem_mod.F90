@@ -3142,8 +3142,7 @@ CONTAINS
     INTEGER            :: KppId,    N,       nIntervals, lineLength
 
     ! Strings
-    CHARACTER(LEN=255) :: ErrMsg,   ThisLoc
-    CHARACTER(LEN=511) :: HomeDir,  AssignmentPath
+    CHARACTER(LEN=255) :: ErrMsg,   ThisLoc,    HomeDir, AssignmentPath
     ! Dynamic line buffer allocated after reading in the maximum line length from the first line of the file
     CHARACTER(LEN=:),  ALLOCATABLE :: line
 
@@ -3499,8 +3498,10 @@ CONTAINS
 
     ! If timer is enabled, open a log file to write the timer data
 #if defined(HIRES_TIMER) || defined(MPI_TIMER)
+    ! Read the homedir variable in case it is not set such as when we skipped the reassignment step
+    CALL get_environment_variable("HOME", HomeDir)
     ! Use write to concatenate strings for the log file path
-    WRITE(AssignmentPath, '(A, A, I0, A)') TRIM(HomeDir), '/timer/timer_', Input_Opt%thisCPU, '.log'
+    WRITE(AssignmentPath, '(A, A, I0, A)') trim(HomeDir), '/timer/timer_', Input_Opt%thisCPU, '.log'
     ! Open the log file
     OPEN(unit=unit_number, file=AssignmentPath, status='replace', action='write', iostat=RC)
     IF (RC /= 0) THEN
@@ -3508,7 +3509,7 @@ CONTAINS
         RETURN
     ELSE
         ! Print path to console
-        PRINT *, "Writing timer log to: ", TRIM(AssignmentPath)
+        PRINT *, "Writing timer log to: ", trim(AssignmentPath)
     END IF
 #endif
 
