@@ -12,8 +12,6 @@
 ! !INTERFACE:
 !
 ! Only define HIRES_TIMER or MPI_TIMER, never both.
-! #define HIRES_TIMER
-#define MPI_TIMER
 MODULE FullChem_Mod
 !
 ! !USES:
@@ -3513,10 +3511,8 @@ CONTAINS
 
     ! If timer is enabled, open a log file to write the timer data
 #if defined(HIRES_TIMER) || defined(MPI_TIMER)
-    ! Read the homedir variable in case it is not set such as when we skipped the reassignment step
-    CALL get_environment_variable("HOME", HomeDir)
     ! Use write to concatenate strings for the log file path
-    WRITE(AssignmentPath, '(A, A, I0, A)') trim(HomeDir), '/timer/timer_', Input_Opt%thisCPU, '.log'
+    WRITE(AssignmentPath, '(A, A, I0, A)') TRIM(Input_Opt%RUN_DIR), '/timer/timer_', Input_Opt%thisCPU, '.log'
     ! Open the log file
     OPEN(unit=unit_number, file=AssignmentPath, status='replace', action='write', iostat=RC)
     IF (RC /= 0) THEN
@@ -3524,7 +3520,7 @@ CONTAINS
         RETURN
     ELSE
         ! Print path to console
-        PRINT *, "Writing timer log to: ", trim(AssignmentPath)
+        PRINT *, "Writing timer log to: ", TRIM(AssignmentPath)
     END IF
 #endif
 
