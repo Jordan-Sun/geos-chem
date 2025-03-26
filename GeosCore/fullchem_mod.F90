@@ -3422,7 +3422,11 @@ CONTAINS
     ENDIF
 
     ! Use write to concatenate strings for the reassignment file path
-    AssignmentPath = TRIM(Input_Opt%RUN_DIR) // 'ReassignmentDir.rc'
+    IF (TRIM(Input_Opt%RUN_DIR) == 'N/A') THEN
+        AssignmentPath = './ReassignmentDir.rc'
+    ELSE
+        AssignmentPath = TRIM(Input_Opt%RUN_DIR) // 'ReassignmentDir.rc'
+    END IF
     ! Debug print
     IF (Input_Opt%amIRoot) THEN
         PRINT *, "Reassignment path file: ", AssignmentPath
@@ -3449,7 +3453,7 @@ CONTAINS
             PRINT *, "Reassignment input directory: ", AssignmentPath
         END IF
         ! Use write to concatenate strings for the reassignment file path
-        WRITE(AssignmentPath, '(A, A, I0, A)') TRIM(Input_Opt%RUN_DIR), TRIM(AssignmentPath), '/rank_', Input_Opt%thisCPU, '.csv'
+        WRITE(AssignmentPath, '(A, A, I0, A)') TRIM(AssignmentPath), '/rank_', Input_Opt%thisCPU, '.csv'
         ! Open the reassignment file
         OPEN(unit=unit_number, file=AssignmentPath, status='old', action='read', iostat=RC)
         IF (RC /= 0) THEN
