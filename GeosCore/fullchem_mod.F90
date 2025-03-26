@@ -131,8 +131,7 @@ MODULE FullChem_Mod
   ! Stores the previous and next PETs for each interval, as well as the indices of the columns to swap.
   INTEGER,  PARAMETER :: unit_number = 10
   TYPE(ReassignmentData), ALLOCATABLE :: reassignment_data(:)
-  ! Whether to enable the reassignment of cells to other processors.
-  ! Todo: Read from HISTORY.rc file.
+  ! Whether to enable the reassignment of cells to other processors, default to .FALSE.
   LOGICAL :: reassign_cells = .FALSE.
   ! Counter to keep track of the current interval.
   INTEGER :: interval
@@ -3142,7 +3141,7 @@ CONTAINS
     INTEGER            :: KppId,    N,       nIntervals, lineLength
 
     ! Strings
-    CHARACTER(LEN=255) :: ErrMsg,   ThisLoc,    HomeDir, AssignmentPath
+    CHARACTER(LEN=255) :: ErrMsg,   ThisLoc,    AssignmentPath
     ! Dynamic line buffer allocated after reading in the maximum line length from the first line of the file
     CHARACTER(LEN=:),  ALLOCATABLE :: line
 
@@ -3424,11 +3423,27 @@ CONTAINS
        RETURN
     ENDIF
 
+    ! Use write to concatenate strings for the reassignment file path
+    AssignmentPath = TRIM(Input_Opt%RUN_DIR) // '/reassignment_dir.rc'
+    ! Check if reassignment is enabled by checking if the file exists
+    INQUIRE(FILE=AssignmentPath, EXIST=reassign_cells)
+    ! Debug print
+    IF (Input_Opt%amIRoot) THEN
+        PRINT *, "Reassignment enabled: ", reassign_cells
+    END IF
+    ! Continue if reassignment is enabled
     IF ( reassign_cells ) THEN
-        ! Read from mapping file to determine which cells we should reassign and to which PET
-        CALL get_environment_variable("HOME", HomeDir)
+        ! Read the reassignment directory from the file
+        OPEN(UNIT=unit_number, FILE=AssignmentPath, STATUS='old', ACTION='read', IOSTAT=RC)
+        IF (RC /= 0) THEN
+            CALL GC_Error( 'Error opening reassignment directory file', RC, ThisLoc )
+            RETURN
+        END IF
+        ! Read the reassignment directory
+        READ(unit_number, '(A)') AssignmentPath
+        CLOSE(unit_number)
         ! Use write to concatenate strings for the reassignment file path
-        WRITE(AssignmentPath, '(A, A, I0, A)') TRIM(HomeDir), '/reassignment/restricted/rank_', Input_Opt%thisCPU, '.csv'
+        WRITE(AssignmentPath, '(A, A, I0, A)') TRIM(AssignmentPath), '/rank_', Input_Opt%thisCPU, '.csv'
         ! Open the reassignment file
         OPEN(unit=unit_number, file=AssignmentPath, status='old', action='read', iostat=RC)
         IF (RC /= 0) THEN
@@ -3465,8 +3480,8 @@ CONTAINS
                 RETURN
             END IF
 #ifdef BALANCE_DEBUG
-            ! debug print contents of prev_PET, next_PET, and NCELL_moving of PET 0
-            IF (Input_Opt%thisCPU == 0) THEN
+            ! debug print contents of prev_PET, next_PET, and NCELL_moving of the root PET
+            IF (Input_Opt%amIRoot) THEN
                 PRINT *, "Interval ", N, " prev_PET: ", reassignment_data(N)%prev_PET, " next_PET: ", reassignment_data(N)%next_PET, " NCELL_moving: ", reassignment_data(N)%NCELL_moving
             END IF
 #endif
