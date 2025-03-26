@@ -3443,6 +3443,10 @@ CONTAINS
         END IF
         ! Read the reassignment directory
         READ(unit_number, '(A)') AssignmentDir
+        IF (RC /= 0) THEN
+            CALL GC_Error( 'Error reading reassignment directory file', RC, ThisLoc )
+            RETURN
+        END IF
         ! Print path to console if this is the root PET
         IF (Input_Opt%amIRoot) THEN
             PRINT *, "Reassignment input directory: ", AssignmentDir
