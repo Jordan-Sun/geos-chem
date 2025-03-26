@@ -3422,7 +3422,11 @@ CONTAINS
     ENDIF
 
     ! Use write to concatenate strings for the reassignment file path
-    AssignmentPath = TRIM(Input_Opt%RUN_DIR) // '/ReassignmentDir.rc'
+    AssignmentPath = TRIM(Input_Opt%RUN_DIR) // 'ReassignmentDir.rc'
+    ! Debug print
+    IF (Input_Opt%amIRoot) THEN
+        PRINT *, "Reassignment path file: ", AssignmentPath
+    END IF
     ! Check if reassignment is enabled by checking if the file exists
     INQUIRE(FILE=AssignmentPath, EXIST=reassign_cells)
     ! Debug print
@@ -3440,6 +3444,10 @@ CONTAINS
         ! Read the reassignment directory
         READ(unit_number, '(A)') AssignmentPath
         CLOSE(unit_number)
+        ! Print path to console if this is the root PET
+        IF (Input_Opt%amIRoot) THEN
+            PRINT *, "Reassignment input directory: ", AssignmentPath
+        END IF
         ! Use write to concatenate strings for the reassignment file path
         WRITE(AssignmentPath, '(A, A, I0, A)') TRIM(Input_Opt%RUN_DIR), TRIM(AssignmentPath), '/rank_', Input_Opt%thisCPU, '.csv'
         ! Open the reassignment file
