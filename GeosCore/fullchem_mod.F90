@@ -3139,7 +3139,7 @@ CONTAINS
     INTEGER            :: KppId,    N,       nIntervals, lineLength
 
     ! Strings
-    CHARACTER(LEN=255) :: ErrMsg,   ThisLoc,    AssignmentPath
+    CHARACTER(LEN=255) :: ErrMsg,   ThisLoc,    AssignmentDir,    AssignmentPath
     ! Dynamic line buffer allocated after reading in the maximum line length from the first line of the file
     CHARACTER(LEN=:),  ALLOCATABLE :: line
 
@@ -3433,10 +3433,6 @@ CONTAINS
     END IF
     ! Check if reassignment is enabled by checking if the file exists
     INQUIRE(FILE=AssignmentPath, EXIST=reassign_cells)
-    ! Debug print
-    IF (Input_Opt%amIRoot) THEN
-        PRINT *, "Reassignment enabled: ", reassign_cells
-    END IF
     ! Continue if reassignment is enabled
     IF ( reassign_cells ) THEN
         ! Read the reassignment directory from the file
@@ -3446,14 +3442,18 @@ CONTAINS
             RETURN
         END IF
         ! Read the reassignment directory
-        READ(unit_number, '(A)') AssignmentPath
-        CLOSE(unit_number)
+        READ(unit_number, '(A)') AssignmentDir
         ! Print path to console if this is the root PET
         IF (Input_Opt%amIRoot) THEN
-            PRINT *, "Reassignment input directory: ", AssignmentPath
+            PRINT *, "Reassignment input directory: ", AssignmentDir
         END IF
+        CLOSE(unit_number)
         ! Use write to concatenate strings for the reassignment file path
-        WRITE(AssignmentPath, '(A, A, I0, A)') TRIM(AssignmentPath), '/rank_', Input_Opt%thisCPU, '.csv'
+        WRITE(AssignmentPath, '(A, A, I0, A)') TRIM(AssignmentDir), '/rank_', Input_Opt%thisCPU, '.csv'
+        ! Print path to console if this is the root PET
+        IF (Input_Opt%amIRoot) THEN
+            PRINT *, "Reassignment input file: ", AssignmentPath
+        END IF
         ! Open the reassignment file
         OPEN(unit=unit_number, file=AssignmentPath, status='old', action='read', iostat=RC)
         IF (RC /= 0) THEN
