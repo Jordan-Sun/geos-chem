@@ -3423,7 +3423,7 @@ CONTAINS
 
     ! Use write to concatenate strings for the reassignment file path
     IF (TRIM(Input_Opt%RUN_DIR) == 'N/A') THEN
-        AssignmentPath = './ReassignmentDir.rc'
+        AssignmentPath = 'ReassignmentDir.rc'
     ELSE
         AssignmentPath = TRIM(Input_Opt%RUN_DIR) // 'ReassignmentDir.rc'
     END IF
