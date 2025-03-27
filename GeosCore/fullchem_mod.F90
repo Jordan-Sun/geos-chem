@@ -12,8 +12,6 @@
 ! !INTERFACE:
 !
 ! Only define HIRES_TIMER or MPI_TIMER, never both.
-! #define HIRES_TIMER
-#define MPI_TIMER
 MODULE FullChem_Mod
 !
 ! !USES:
@@ -131,8 +129,7 @@ MODULE FullChem_Mod
   ! Stores the previous and next PETs for each interval, as well as the indices of the columns to swap.
   INTEGER,  PARAMETER :: unit_number = 10
   TYPE(ReassignmentData), ALLOCATABLE :: reassignment_data(:)
-  ! Whether to enable the reassignment of cells to other processors.
-  ! Todo: Read from HISTORY.rc file.
+  ! Whether to enable the reassignment of cells to other processors, default to .FALSE.
   LOGICAL :: reassign_cells = .FALSE.
   ! Counter to keep track of the current interval.
   INTEGER :: interval
@@ -3142,7 +3139,7 @@ CONTAINS
     INTEGER            :: KppId,    N,       nIntervals, lineLength
 
     ! Strings
-    CHARACTER(LEN=255) :: ErrMsg,   ThisLoc,    HomeDir, AssignmentPath
+    CHARACTER(LEN=255) :: ErrMsg,   ThisLoc,    AssignmentDir,    AssignmentPath
     ! Dynamic line buffer allocated after reading in the maximum line length from the first line of the file
     CHARACTER(LEN=:),  ALLOCATABLE :: line
 
@@ -3424,11 +3421,46 @@ CONTAINS
        RETURN
     ENDIF
 
+    ! Use write to concatenate strings for the reassignment file path
+    IF (TRIM(Input_Opt%RUN_DIR) == 'N/A') THEN
+        AssignmentPath = 'ReassignmentDir.rc'
+    ELSE
+        AssignmentPath = TRIM(Input_Opt%RUN_DIR) // 'ReassignmentDir.rc'
+    END IF
+    ! Print path info
+    IF (Input_Opt%amIRoot) THEN
+        PRINT *, 'Reassignment: checking if reassignment directory exists at ', TRIM(AssignmentPath)
+    ENDIF
+    ! Check if reassignment is enabled by checking if the file exists
+    INQUIRE(FILE=AssignmentPath, EXIST=reassign_cells)
+    ! Continue if reassignment is enabled
     IF ( reassign_cells ) THEN
-        ! Read from mapping file to determine which cells we should reassign and to which PET
-        CALL get_environment_variable("HOME", HomeDir)
+        ! Read the reassignment directory from the file
+        OPEN(UNIT=unit_number, FILE=AssignmentPath, STATUS='old', ACTION='read', IOSTAT=RC)
+        IF (RC /= 0) THEN
+            CALL GC_Error( 'Error opening reassignment directory file', RC, ThisLoc )
+            RETURN
+        END IF
+        ! Read the reassignment directory
+        READ(unit_number, '(A)') AssignmentDir
+        IF (RC /= 0) THEN
+            CALL GC_Error( 'Error reading reassignment directory file', RC, ThisLoc )
+            RETURN
+        END IF
+        ! Print path to console if this is the root PET
+        IF (Input_Opt%amIRoot) THEN
+            PRINT *, "Reassignment: reading reassignment files from ", TRIM(AssignmentDir)
+        ENDIF
+        CLOSE(unit_number)
         ! Use write to concatenate strings for the reassignment file path
-        WRITE(AssignmentPath, '(A, A, I0, A)') TRIM(HomeDir), '/reassignment/restricted/rank_', Input_Opt%thisCPU, '.csv'
+        WRITE(AssignmentPath, '(A, A, I0, A)') TRIM(AssignmentDir), '/rank_', Input_Opt%thisCPU, '.csv'
+        ! Sanity check
+        IF (Input_Opt%amIRoot) THEN
+            PRINT *, "Debug: Current working directory and reassignment file existence"
+            CALL execute_command_line('pwd')
+            CALL execute_command_line('ls -l '//TRIM(AssignmentDir))
+            CALL execute_command_line('ls -l '//TRIM(AssignmentPath))
+        END IF
         ! Open the reassignment file
         OPEN(unit=unit_number, file=AssignmentPath, status='old', action='read', iostat=RC)
         IF (RC /= 0) THEN
@@ -3465,8 +3497,8 @@ CONTAINS
                 RETURN
             END IF
 #ifdef BALANCE_DEBUG
-            ! debug print contents of prev_PET, next_PET, and NCELL_moving of PET 0
-            IF (Input_Opt%thisCPU == 0) THEN
+            ! debug print contents of prev_PET, next_PET, and NCELL_moving of the root PET
+            IF (Input_Opt%amIRoot) THEN
                 PRINT *, "Interval ", N, " prev_PET: ", reassignment_data(N)%prev_PET, " next_PET: ", reassignment_data(N)%next_PET, " NCELL_moving: ", reassignment_data(N)%NCELL_moving
             END IF
 #endif
@@ -3498,10 +3530,8 @@ CONTAINS
 
     ! If timer is enabled, open a log file to write the timer data
 #if defined(HIRES_TIMER) || defined(MPI_TIMER)
-    ! Read the homedir variable in case it is not set such as when we skipped the reassignment step
-    CALL get_environment_variable("HOME", HomeDir)
     ! Use write to concatenate strings for the log file path
-    WRITE(AssignmentPath, '(A, A, I0, A)') trim(HomeDir), '/timer/timer_', Input_Opt%thisCPU, '.log'
+    WRITE(AssignmentPath, '(A, A, I0, A)') TRIM(Input_Opt%RUN_DIR), '/timer/timer_', Input_Opt%thisCPU, '.log'
     ! Open the log file
     OPEN(unit=unit_number, file=AssignmentPath, status='replace', action='write', iostat=RC)
     IF (RC /= 0) THEN
@@ -3509,7 +3539,7 @@ CONTAINS
         RETURN
     ELSE
         ! Print path to console
-        PRINT *, "Writing timer log to: ", trim(AssignmentPath)
+        PRINT *, "Writing timer log to: ", TRIM(AssignmentPath)
     END IF
 #endif
 
