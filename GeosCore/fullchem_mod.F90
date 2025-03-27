@@ -3458,6 +3458,7 @@ CONTAINS
         IF (Input_Opt%amIRoot) THEN
             PRINT *, "Debug: Current working directory and reassignment file existence"
             CALL execute_command_line('pwd')
+            CALL execute_command_line('ls -l '//TRIM(AssignmentDir))
             CALL execute_command_line('ls -l '//TRIM(AssignmentPath))
         END IF
         ! Open the reassignment file
