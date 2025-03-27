@@ -3531,13 +3531,14 @@ CONTAINS
     ! If timer is enabled, open a log file to write the timer data
 #if defined(HIRES_TIMER) || defined(MPI_TIMER)
     ! Use write to concatenate strings for the log file path
-    WRITE(AssignmentPath, '(A, A, I0, A)') TRIM(Input_Opt%RUN_DIR), '/timer/timer_', Input_Opt%thisCPU, '.log'
+    WRITE(AssignmentPath, '(A, A, I0, A)') TRIM(AssignmentDir), '/timer/timer_', Input_Opt%thisCPU, '.log'
     ! Open the log file
     OPEN(unit=unit_number, file=AssignmentPath, status='replace', action='write', iostat=RC)
     IF (RC /= 0) THEN
         CALL GC_Error( 'Error opening timer log file', RC, ThisLoc )
         RETURN
-    ELSE
+    END IF
+    IF (Input_Opt%amIRoot) THEN
         ! Print path to console
         PRINT *, "Writing timer log to: ", TRIM(AssignmentPath)
     END IF
