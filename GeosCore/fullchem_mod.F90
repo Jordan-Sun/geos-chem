@@ -3427,10 +3427,9 @@ CONTAINS
     ELSE
         AssignmentPath = TRIM(Input_Opt%RUN_DIR) // 'ReassignmentDir.rc'
     END IF
-    ! Debug print
+    ! Print path info
     IF (Input_Opt%amIRoot) THEN
-        PRINT *, 'DEBUG: Attempting to open file: [', TRIM(AssignmentPath), ']'
-        CALL execute_command_line('pwd')  ! show working directory for sanity check
+        PRINT *, 'Reassignment: checking if reassignment directory exists at ', TRIM(AssignmentPath)
     ENDIF
     ! Check if reassignment is enabled by checking if the file exists
     INQUIRE(FILE=AssignmentPath, EXIST=reassign_cells)
@@ -3450,14 +3449,16 @@ CONTAINS
         END IF
         ! Print path to console if this is the root PET
         IF (Input_Opt%amIRoot) THEN
-            PRINT *, "Reassignment input directory: ", AssignmentDir
-        END IF
+            PRINT *, "Reassignment: reading reassignment files from ", TRIM(AssignmentDir)
+        ENDIF
         CLOSE(unit_number)
         ! Use write to concatenate strings for the reassignment file path
         WRITE(AssignmentPath, '(A, A, I0, A)') TRIM(AssignmentDir), '/rank_', Input_Opt%thisCPU, '.csv'
-        ! Print path to console if this is the root PET
+        ! Sanity check
         IF (Input_Opt%amIRoot) THEN
-            PRINT *, "Reassignment input file: ", AssignmentPath
+            PRINT *, "Debug: Current working directory and reassignment file existence"
+            CALL execute_command_line('pwd')
+            CALL execute_command_line('ls -l '//TRIM(AssignmentPath))
         END IF
         ! Open the reassignment file
         OPEN(unit=unit_number, file=AssignmentPath, status='old', action='read', iostat=RC)
