@@ -3429,8 +3429,9 @@ CONTAINS
     END IF
     ! Debug print
     IF (Input_Opt%amIRoot) THEN
-        PRINT *, "Reassignment path file: ", AssignmentPath
-    END IF
+        PRINT *, 'DEBUG: Attempting to open file: [', TRIM(AssignmentPath), ']'
+        CALL execute_command_line('pwd')  ! show working directory for sanity check
+    ENDIF
     ! Check if reassignment is enabled by checking if the file exists
     INQUIRE(FILE=AssignmentPath, EXIST=reassign_cells)
     ! Continue if reassignment is enabled
