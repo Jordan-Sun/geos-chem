@@ -3421,7 +3421,20 @@ CONTAINS
        RETURN
     ENDIF
 
-    ! Use write to concatenate strings for the reassignment file path
+    !------------------------------------------------------------------------
+    ! Reassignment file structure:
+    !
+    ! - The path to the reassignment directory is read from 'ReassignmentDir.rc'.
+    !   If the file is missing or empty, reassignment is disabled.
+    !
+    ! - The directory must contain P files named 'rank_p.csv', one per processor.
+    !
+    ! - Each file is formatted as follows:
+    !     * Line 1: number of intervals and maximum line length.
+    !     * Remaining lines are grouped in pairs, one pair per interval:
+    !         - First line: source processor, target processor, number of columns.
+    !         - Second line: indices of columns to send to the target processor.
+    !------------------------------------------------------------------------
     IF (TRIM(Input_Opt%RUN_DIR) == 'N/A') THEN
         AssignmentPath = 'ReassignmentDir.rc'
     ELSE
