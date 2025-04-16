@@ -32,13 +32,15 @@ MODULE FullChem_Mod
   END INTERFACE
 #endif
 
-  ! Define the derived type
-  TYPE :: ReassignmentData
-    INTEGER :: prev_PET
-    INTEGER :: next_PET
-    INTEGER :: NCELL_moving
-    INTEGER,    ALLOCATABLE :: swap_indices(:)
-  END TYPE ReassignmentData
+! Define the derived type
+TYPE :: ReassignmentData
+    INTEGER :: num_prev_PETs   ! Number of source PETs
+    INTEGER, ALLOCATABLE :: prev_PETs(:)   ! Array of source PETs
+    INTEGER :: num_next_PETs   ! Number of target PETs
+    INTEGER, ALLOCATABLE :: next_PETs(:)   ! Array of target PETs
+    INTEGER, ALLOCATABLE :: NCELL_moving(:) ! Number of cells moving for each target
+    INTEGER, ALLOCATABLE :: swap_indices(:,:) ! Swap indices for each target
+END TYPE ReassignmentData
 
   PRIVATE
 !
@@ -3431,9 +3433,10 @@ CONTAINS
     !
     ! - Each file is formatted as follows:
     !     * Line 1: number of intervals and maximum line length.
-    !     * Remaining lines are grouped in pairs, one pair per interval:
-    !         - First line: source processor, target processor, number of columns.
-    !         - Second line: indices of columns to send to the target processor.
+    !     * Remaining lines are grouped as follows:
+    !         - First line: Number of source processors, followed by pairs of source processor and number of columns to receive from that processor.
+    !         - Second line: Number of target processors, followed by each target processor.
+    !         - Following lines: The indices of the columns to be reassigned, one line per target processor.
     !------------------------------------------------------------------------
     IF (TRIM(Input_Opt%RUN_DIR) == 'N/A') THEN
         AssignmentPath = 'ReassignmentDir.rc'
