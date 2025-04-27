@@ -3448,7 +3448,7 @@ CONTAINS
     OPEN(UNIT=unit_number, FILE=AssignmentPath, STATUS='old', ACTION='read', IOSTAT=RC)
     ! Continue if reassignment is enabled
     reassign_cells = (RC == 0)
-    IF (Input_Opt%amIRoot .and. .not. eassign_cells) THEN
+    IF (Input_Opt%amIRoot .AND. .NOT. reassign_cells) THEN
         PRINT *, 'Reassignment: reassignment directory file not found or empty. Reassignment disabled.'
         RETURN
     END IF
