@@ -3445,15 +3445,14 @@ CONTAINS
         PRINT *, 'Reassignment: checking if reassignment directory exists at ', TRIM(AssignmentPath)
     ENDIF
     ! Check if reassignment is enabled by checking if the file exists
-    INQUIRE(FILE=AssignmentPath, EXIST=reassign_cells)
+    OPEN(UNIT=unit_number, FILE=AssignmentPath, STATUS='old', ACTION='read', IOSTAT=RC)
     ! Continue if reassignment is enabled
+    reassign_cells = (RC == 0)
+    IF (Input_Opt%amIRoot .and. .not. eassign_cells) THEN
+        PRINT *, 'Reassignment: reassignment directory file not found or empty. Reassignment disabled.'
+        RETURN
+    END IF
     IF ( reassign_cells ) THEN
-        ! Read the reassignment directory from the file
-        OPEN(UNIT=unit_number, FILE=AssignmentPath, STATUS='old', ACTION='read', IOSTAT=RC)
-        IF (RC /= 0) THEN
-            CALL GC_Error( 'Error opening reassignment directory file', RC, ThisLoc )
-            RETURN
-        END IF
         ! Read the reassignment directory
         READ(unit_number, '(A)') AssignmentDir
         IF (RC /= 0) THEN
