@@ -3450,7 +3450,6 @@ CONTAINS
     reassign_cells = (RC == 0)
     IF (Input_Opt%amIRoot .AND. .NOT. reassign_cells) THEN
         PRINT *, 'Reassignment: reassignment directory file not found or empty. Reassignment disabled.'
-        RETURN
     END IF
     IF ( reassign_cells ) THEN
         ! Read the reassignment directory
@@ -3489,7 +3488,7 @@ CONTAINS
         ! if debug, print how many intervals we have
         PRINT *, "Number of intervals: ", nIntervals, " line length: ", lineLength
 #endif
-    ! Allocate the reassignment data array
+        ! Allocate the reassignment data array
         ALLOCATE(reassignment_data(nIntervals), STAT=RC)
         IF ( RC /= GC_SUCCESS ) Then
             CALL GC_Error( 'Failed to allocate reassignment_data', RC, ThisLoc )
@@ -3536,9 +3535,9 @@ CONTAINS
 #endif
             END IF
         END DO
-
-        CLOSE(unit_number)
     END IF
+
+    CLOSE(unit_number)
 
     ! If timer is enabled, open a log file to write the timer data
 #if defined(HIRES_TIMER) || defined(MPI_TIMER)
