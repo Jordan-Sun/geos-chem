@@ -115,6 +115,8 @@ CONTAINS
 
     ! Pointers
     REAL(fp), POINTER  :: p_FSOL (:,:,:)
+    ! To prevent association of scalar actual argument to array dummy argument
+    REAL(f8), POINTER :: Null_Diag(:,:,:)
 
     !========================================================================
     ! DO_CONVECT begins here!
@@ -134,6 +136,7 @@ CONTAINS
     IF ( State_Diag%Archive_BudgetConvection ) THEN
 
        ! Get initial column masses (full, trop, PBL)
+       Null_Diag => NULL()
        CALL Compute_Budget_Diagnostics(                                      &
             Input_Opt   = Input_Opt,                                         &
             State_Chm   = State_Chm,                                         &
@@ -141,16 +144,16 @@ CONTAINS
             State_Grid  = State_Grid,                                        &
             State_Met   = State_Met,                                         &
             isFull      = State_Diag%Archive_BudgetConvectionFull,           &
-            diagFull    = NULL(),                                            &
+            diagFull    = Null_Diag,                                         &
             mapDataFull = State_Diag%Map_BudgetConvectionFull,               &
             isTrop      = State_Diag%Archive_BudgetConvectionTrop,           &
-            diagTrop    = NULL(),                                            &
+            diagTrop    = Null_Diag,                                         &
             mapDataTrop = State_Diag%Map_BudgetConvectionTrop,               &
             isPBL       = State_Diag%Archive_BudgetConvectionPBL,            &
-            diagPBL     = NULL(),                                            &
+            diagPBL     = Null_Diag,                                         &
             mapDataPBL  = State_Diag%Map_BudgetConvectionPBL,                &
             isLevs      = State_Diag%Archive_BudgetConvectionLevs,           &
-            diagLevs    = NULL(),                                            &
+            diagLevs    = Null_Diag,                                         &
             mapDataLevs = State_Diag%Map_BudgetConvectionLevs,               &
             colMass     = State_Diag%BudgetColumnMass,                       &
             before_op   = .TRUE.,                                            &

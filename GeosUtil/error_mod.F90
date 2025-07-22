@@ -14,6 +14,7 @@ MODULE ERROR_MOD
 !
 ! !USES:
 !
+  USE IEEE_ARITHMETIC
   USE ErrCode_Mod
   USE Input_Opt_Mod,      ONLY : OptInput
   USE PRECISION_MOD            ! For GEOS-Chem Precision (fp)
@@ -124,7 +125,9 @@ CONTAINS
 !------------------------------------------------------------------------------
 !BOC
 
-    IT_IS_A_NAN = ISNAN( VALUE )
+    ! NVFORTRAN does not support non-standard ISNAN function
+    ! https://forums.developer.nvidia.com/t/error-isnan-has-not-been-explicitly-declared/132718
+    IT_IS_A_NAN = IEEE_IS_NAN( VALUE )
 
   END FUNCTION NAN_FLOAT
 !EOC
@@ -157,7 +160,7 @@ CONTAINS
 !------------------------------------------------------------------------------
 !BOC
 
-    IT_IS_A_NAN = ISNAN( VALUE )
+    IT_IS_A_NAN = IEEE_IS_NAN( VALUE )
 
   END FUNCTION NAN_DBLE
 !EOC
@@ -192,7 +195,7 @@ CONTAINS
 
 #if defined( LINUX_GFORTRAN )
 
-    IT_IS_A_FINITE = ((.not.ISNAN(VALUE)) .and. &
+    IT_IS_A_FINITE = ((.not.IEEE_IS_NAN(VALUE)) .and. &
                       (VALUE.lt.HUGE(1.0e0)) .and. &
                       (VALUE.gt.(-1.0e0*HUGE(1.0e0))))
 
@@ -245,7 +248,7 @@ CONTAINS
 
 #if   defined( LINUX_GFORTRAN )
 
-    IT_IS_A_FINITE = ((.not.ISNAN(VALUE)) .and. &
+    IT_IS_A_FINITE = ((.not.IEEE_IS_NAN(VALUE)) .and. &
                       (VALUE.lt.HUGE(1.d0)) .and. &
                       (VALUE.gt.(-1.0d0*HUGE(1.d0))))
 

@@ -277,6 +277,9 @@ CONTAINS
     TYPE(Species), POINTER  :: SpcInfo
     REAL(fp),      POINTER  :: DepFreq(:,:,:  )  ! IM, JM, nDryDep
 
+    ! To prevent association of scalar actual argument to array dummy argument
+    REAL(f8), POINTER :: Null_Diag(:,:,:)
+
     ! Strings
     CHARACTER(LEN=255)      :: ErrMsg, ErrorMsg, ThisLoc
 
@@ -317,6 +320,7 @@ CONTAINS
     IF ( State_Diag%Archive_BudgetEmisDryDep ) THEN
 
        ! Get initial column masses (full, trop, PBL)
+       Null_Diag => NULL()
        CALL Compute_Budget_Diagnostics(                                      &
             Input_Opt   = Input_Opt,                                         &
             State_Chm   = State_Chm,                                         &
@@ -324,16 +328,16 @@ CONTAINS
             State_Grid  = State_Grid,                                        &
             State_Met   = State_Met,                                         &
             isFull      = State_Diag%Archive_BudgetEmisDryDepFull,           &
-            diagFull    = NULL(),                                            &
+            diagFull    = Null_Diag,                                         &
             mapDataFull = State_Diag%Map_BudgetEmisDryDepFull,               &
             isTrop      = State_Diag%Archive_BudgetEmisDryDepTrop,           &
-            diagTrop    = NULL(),                                            &
+            diagTrop    = Null_Diag,                                         &
             mapDataTrop = State_Diag%Map_BudgetEmisDryDepTrop,               &
             isPBL       = State_Diag%Archive_BudgetEmisDryDepPBL,            &
-            diagPBL     = NULL(),                                            &
+            diagPBL     = Null_Diag,                                         &
             mapDataPBL  = State_Diag%Map_BudgetEmisDryDepPBL,                &
             isLevs      = State_Diag%Archive_BudgetEmisDryDepLevs,           &
-            diagLevs    = NULL(),                                            &
+            diagLevs    = Null_Diag,                                         &
             mapDataLevs = State_Diag%Map_BudgetEmisDryDepLevs,               &
             colMass     = State_Diag%BudgetColumnMass,                       &
             before_op   = .TRUE.,                                            &

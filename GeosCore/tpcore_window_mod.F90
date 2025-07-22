@@ -184,6 +184,7 @@ CONTAINS
 #endif
 #endif
  USE State_Grid_Mod, ONLY : GrdState
+ USE PRECISION_MOD      ! For GEOS-Chem Precision (fp)
 
  implicit none
 
@@ -200,9 +201,9 @@ CONTAINS
  integer, intent(in):: ng       ! large ghost width
  integer, intent(in):: mg       ! small ghost width
 
- real, intent(in):: dt          ! Time step in seconds
- real, intent(in):: ae          ! Earth's radius (m)
- real, intent(in):: clat(0:jm+1)    ! latitude in radian  (dan)
+ real(fp), intent(in):: dt          ! Time step in seconds
+ real(fp), intent(in):: ae          ! Earth's radius (m)
+ real(fp), intent(in):: clat(0:jm+1)    ! latitude in radian  (dan)
 
 !-----
 ! Local
@@ -457,6 +458,7 @@ CONTAINS
     USE PhysConstants  ! Physical constants g0_100 and AIRMW
     USE State_Chm_Mod,  ONLY : ChmState
     USE State_Diag_Mod, ONLY : DgnState
+    USE PRECISION_MOD  ! For GEOS-Chem Precision (fp)
 
  implicit none
 
@@ -494,10 +496,11 @@ CONTAINS
 ! constraint for piece-wise parabolic distribution.
 ! *PPM: Piece-wise Parabolic Method
 
- real, intent(in):: ak(km+1)              ! See below
- real, intent(in):: bk(km+1)              ! See below
- real, intent(in):: u(:,:,:)    ! u-wind (m/s) at mid-time-level (t=t+dt/2)
- real, intent(inout):: v(:,:,:) ! v-wind (m/s) at mid-time-level (t=t+dt/2)
+ ! USE fp
+ real(fp), intent(in):: ak(km+1)              ! See below
+ real(fp), intent(in):: bk(km+1)              ! See below
+ real(fp), intent(in):: u(:,:,:)    ! u-wind (m/s) at mid-time-level (t=t+dt/2)
+ real(fp), intent(inout):: v(:,:,:) ! v-wind (m/s) at mid-time-level (t=t+dt/2)
 
 !------------------------------------------------------
 ! The hybrid ETA-coordinate:
@@ -537,15 +540,15 @@ CONTAINS
 ! Winds (u,v), ps, and q are assumed to be defined at the same points.
 ! The latitudes are given by clat, input to the initialization routine: init_tpcore.
 
- real, intent(in):: ps1(im,jfirst:jlast)  ! surface pressure at current time
- real, intent(in):: ps2(im,jfirst:jlast)  ! surface pressure at future time=t+dt
- real, intent(in):: dt                    ! Transport time step in seconds
- real, intent(in):: ae                    ! Earth's radius (m)
+ real(fp), intent(in):: ps1(im,jfirst:jlast)  ! surface pressure at current time
+ real(fp), intent(in):: ps2(im,jfirst:jlast)  ! surface pressure at future time=t+dt
+ real(fp), intent(in):: dt                    ! Transport time step in seconds
+ real(fp), intent(in):: ae                    ! Earth's radius (m)
 
- real, intent(inout):: q(:,:,:,:)         ! Tracer "mixing ratios"
+ real(fp), intent(inout):: q(:,:,:,:)         ! Tracer "mixing ratios"
                                           ! q could easily be re-dimensioned
 
- real, intent(out):: ps(im,jfirst:jlast)  ! "predicted" surface pressure
+ real(fp), intent(out):: ps(im,jfirst:jlast)  ! "predicted" surface pressure
 
  real  delp(im,jfirst:jlast,km)    ! Predicted thickness at future time (t=t+dt)
  real  pe(im,km+1,jfirst:jlast)    ! Pressure at layer edges (predicted)
@@ -554,9 +557,9 @@ CONTAINS
  real  va(im,jfirst:jlast,km)     ! N-S CFL at cell center (scalar points)
 
  !%%% Added XMASS, YMASS for the PJC pressure-fixer (bdf, bmy, 5/7/03)
- REAL,    INTENT(IN)    :: XMASS(:,:,:), YMASS(:,:,:)
+ REAL(FP),    INTENT(IN)    :: XMASS(:,:,:), YMASS(:,:,:)
 
- REAL,    INTENT(IN)    :: AREA_M2(JM)       ! box area for mass flux diag
+ REAL(FP),    INTENT(IN)    :: AREA_M2(JM)       ! box area for mass flux diag
 
  ! Chemistry and diagnostic state objects
  TYPE(ChmState), INTENT(INOUT) :: State_Chm
@@ -926,6 +929,8 @@ CONTAINS
 ! (fx,fy): background air mass flxues
 ! (cx,cy): CFL number
 
+ USE PRECISION_MOD      ! For GEOS-Chem Precision (fp)
+
  implicit none
 
  integer, intent(in):: im
@@ -939,20 +944,20 @@ CONTAINS
  integer, intent(in):: mg
  integer, intent(in):: n_adj
 
- real, intent(in):: dt
- real, intent(in):: ae
- real, intent(in):: ak(km+1)
- real, intent(in):: bk(km+1)
+ real(fp), intent(in):: dt
+ real(fp), intent(in):: ae
+ real(fp), intent(in):: ak(km+1)
+ real(fp), intent(in):: bk(km+1)
  real, intent(in):: psg(im,jfirst-mg:jlast+mg,2)   ! Was ps1 and ps2
- real, intent(in):: u(im,jfirst:jlast,km)
- real, intent(in):: v(im,jfirst-mg:jlast+mg,km)
+ real(fp), intent(in):: u(im,jfirst:jlast,km)
+ real(fp), intent(in):: v(im,jfirst-mg:jlast+mg,km)
 
  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
  !%%% MODIFICATION by Harvard Atmospheric Chemistry Modeling Group
  !%%%
  !%%% Added XMASS, YMASS for PJC/LLNL pressure fixer (bdf, bmy, 5/7/03)
  !%%%
- REAL, INTENT(IN) :: XMASS(IM,JM,KM), YMASS(IM,JM,KM)
+ REAL(FP), INTENT(IN) :: XMASS(IM,JM,KM), YMASS(IM,JM,KM)
  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 ! Output:
@@ -960,7 +965,7 @@ CONTAINS
  real, intent(out):: cx(im,jfirst-ng:jlast+ng,km)
  real, intent(out):: delp (im,jfirst:jlast,km)
 
- real, intent(out):: ps(im,jfirst:jlast)
+ real(fp), intent(out):: ps(im,jfirst:jlast)
  real, intent(out):: fx(im,jfirst:jlast,km)
  real, intent(out):: cy(im,jfirst:jlast+mg,km)
  real, intent(out):: fy(im,jfirst:jlast+mg,km)
@@ -2288,6 +2293,7 @@ CONTAINS
  subroutine qmap(pe,  q, im, jm, km, nx, jfirst, jlast, ng, nq,       &
                  ps,  ak, bk, kord, iv)
 
+ USE PRECISION_MOD      ! For GEOS-Chem Precision (fp)
  implicit none
 
 !INPUT
@@ -2300,13 +2306,13 @@ CONTAINS
                                  ! iv=-1: for vector
    integer jfirst, jlast         ! starting & ending latitude index
    integer ng                    ! width of ghost regions
-   real, intent(in):: ak(km+1)
-   real, intent(in):: bk(km+1)
+   real(fp), intent(in):: ak(km+1)
+   real(fp), intent(in):: bk(km+1)
    real, intent(in):: pe(im,km+1,jfirst:jlast)
 
 ! INPUT/OUTPUT
-   real q(im,jfirst-ng:jlast+ng,km,nq) ! tracers including specific humidity
-   real ps(im,jfirst:jlast)      ! surface pressure
+   real(fp) q(im,jfirst-ng:jlast+ng,km,nq) ! tracers including specific humidity
+   real(fp) ps(im,jfirst:jlast)      ! surface pressure
 
 ! Local arrays:
   real pe2(im,km+1)
@@ -2364,6 +2370,7 @@ CONTAINS
                       kn,   pe2,   q2,                         &
                       im, i1, i2, j, jfirst, jlast, ng, iv, kord)
 
+ USE PRECISION_MOD      ! For GEOS-Chem Precision (fp) 
  implicit none
 
 !INPUT PARAMETERS:
@@ -2385,10 +2392,10 @@ CONTAINS
  real pe2(im,kn+1)                ! pressure at layer edges
                                         ! (from model top to bottom surface)
                                         ! in the new vertical coordinate
- real q1(im,jfirst-ng:jlast+ng,km)     ! Field input
+ real(fp) q1(im,jfirst-ng:jlast+ng,km)     ! Field input
 
 !OUTPUT PARAMETERS:
- real q2(im,jfirst-ng:jlast+ng,kn)     ! Field output
+ real(fp) q2(im,jfirst-ng:jlast+ng,kn)     ! Field output
 
 ! LOCAL VARIABLES:
 
@@ -3195,6 +3202,8 @@ CONTAINS
  subroutine adj_fx(im, jm, km, jfirst, jlast, ak, bk, ffsl,  &
                    ps0, ps2, pe, delp, fx3, cx, fy3, ng,     &
                    mg, tiny, n_adj)
+
+ USE PRECISION_MOD      ! For GEOS-Chem Precision (fp)
  implicit none
 
  integer, intent(in):: im
@@ -3204,14 +3213,14 @@ CONTAINS
  integer, intent(in):: jfirst, jlast
  integer, intent(in):: n_adj
  real, intent(in):: tiny
- real, intent(in)::  ak(km+1)
- real, intent(in)::  bk(km+1)
+ real(fp), intent(in)::  ak(km+1)
+ real(fp), intent(in)::  bk(km+1)
  real, intent(in)::  ps2(im,jfirst-mg:jlast+mg)
  real, intent(in)::   cx(im,jfirst-ng:jlast+ng,km)
  real, intent(inout)::   pe(im,km+1,jfirst:jlast)
  logical, intent(in):: ffsl(jfirst-ng:jlast+ng,km)
 
- real, intent(inout):: ps0(im,jfirst:jlast)
+ real(fp), intent(inout):: ps0(im,jfirst:jlast)
  real, intent(inout):: fx3(im,jfirst:jlast,km)
  real, intent(inout):: fy3(im,jfirst:jlast+mg,km)
  real, intent(inout):: delp(im,jfirst:jlast,km)

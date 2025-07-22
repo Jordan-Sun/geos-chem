@@ -163,6 +163,8 @@ CONTAINS
     ! Scalars
     INTEGER                 :: TS_Dyn
     REAL(f8)                :: DT_Dyn
+    ! To prevent association of scalar actual argument to array dummy argument
+    REAL(f8), POINTER :: Null_Diag(:,:,:)
 
     ! Strings
     CHARACTER(LEN=255)      :: errMsg
@@ -190,6 +192,7 @@ CONTAINS
     IF ( State_Diag%Archive_BudgetWetDep ) THEN
 
        ! Get initial column masses (full, trop, PBL)
+       Null_Diag => NULL()
        CALL Compute_Budget_Diagnostics(                                      &
             Input_Opt   = Input_Opt,                                         &
             State_Chm   = State_Chm,                                         &
@@ -197,16 +200,16 @@ CONTAINS
             State_Grid  = State_Grid,                                        &
             State_Met   = State_Met,                                         &
             isFull      = State_Diag%Archive_BudgetWetDepFull,               &
-            diagFull    = NULL(),                                            &
+            diagFull    = Null_Diag,                                         &
             mapDataFull = State_Diag%Map_BudgetWetDepFull,                   &
             isTrop      = State_Diag%Archive_BudgetWetDepTrop,               &
-            diagTrop    = NULL(),                                            &
+            diagTrop    = Null_Diag,                                         &
             mapDataTrop = State_Diag%Map_BudgetWetDepTrop,                   &
             isPBL       = State_Diag%Archive_BudgetWetDepPBL,                &
-            diagPBL     = NULL(),                                            &
+            diagPBL     = Null_Diag,                                         &
             mapDataPBL  = State_Diag%Map_BudgetWetDepPBL,                    &
             isLevs      = State_Diag%Archive_BudgetWetDepLevs,               &
-            diagLevs    = NULL(),                                            &
+            diagLevs    = Null_Diag,                                         &
             mapDataLevs = State_Diag%Map_BudgetWetDepLevs,                   &
             colMass     = State_Diag%BudgetColumnMass,                       &
             before_op   = .TRUE.,                                            &

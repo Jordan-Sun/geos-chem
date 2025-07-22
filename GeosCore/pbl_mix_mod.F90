@@ -97,6 +97,9 @@ CONTAINS
     INTEGER            :: TS_Dyn
     INTEGER            :: previous_units
     REAL(f8)           :: DT_Dyn
+    
+    ! To prevent association of scalar actual argument to array dummy argument
+    REAL(f8), POINTER :: Null_Diag(:,:,:)
 
     ! Strings
     CHARACTER(LEN=255) :: ErrMsg
@@ -117,6 +120,7 @@ CONTAINS
     IF ( State_Diag%Archive_BudgetMixing ) THEN
 
        ! Get initial column masses (full, trop, PBL)
+       Null_Diag => NULL()
        CALL Compute_Budget_Diagnostics(                                      &
             Input_Opt   = Input_Opt,                                         &
             State_Chm   = State_Chm,                                         &
@@ -124,16 +128,16 @@ CONTAINS
             State_Grid  = State_Grid,                                        &
             State_Met   = State_Met,                                         &
             isFull      = State_Diag%Archive_BudgetMixingFull,               &
-            diagFull    = NULL(),                                            &
+            diagFull    = Null_Diag,                                         &
             mapDataFull = State_Diag%Map_BudgetMixingFull,                   &
             isTrop      = State_Diag%Archive_BudgetMixingTrop,               &
-            diagTrop    = NULL(),                                            &
+            diagTrop    = Null_Diag,                                         &
             mapDataTrop = State_Diag%Map_BudgetMixingTrop,                   &
             isPBL       = State_Diag%Archive_BudgetMixingPBL,                &
-            diagPBL     = NULL(),                                            &
+            diagPBL     = Null_Diag,                                         &
             mapDataPBL  = State_Diag%Map_BudgetMixingPBL,                    &
             isLevs      = State_Diag%Archive_BudgetMixingLevs,               &
-            diagLevs    = NULL(),                                            &
+            diagLevs    = Null_Diag,                                         &
             mapDataLevs = State_Diag%Map_BudgetMixingLevs,                   &
             colMass     = State_Diag%BudgetColumnMass,                       &
             before_op   = .TRUE.,                                            &
