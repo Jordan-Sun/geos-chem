@@ -127,7 +127,11 @@ CONTAINS
 
     ! NVFORTRAN does not support non-standard ISNAN function
     ! https://forums.developer.nvidia.com/t/error-isnan-has-not-been-explicitly-declared/132718
-    IT_IS_A_NAN = IEEE_IS_NAN( VALUE )
+    IF (IEEE_SUPPORT_STANDARD( VALUE )) THEN
+      IT_IS_A_NAN = IEEE_IS_NAN( VALUE )
+    ELSE
+      IT_IS_A_NAN = .TRUE. ! Defaults to true to always throw
+    ENDIF
 
   END FUNCTION NAN_FLOAT
 !EOC
@@ -160,7 +164,13 @@ CONTAINS
 !------------------------------------------------------------------------------
 !BOC
 
-    IT_IS_A_NAN = IEEE_IS_NAN( VALUE )
+    IF (IEEE_SUPPORT_STANDARD( VALUE )) THEN
+      IT_IS_A_NAN = IEEE_IS_NAN( VALUE )
+    ELSE
+      ! Defaults to true to always throw
+      ! Todo: maybe print an error message
+      IT_IS_A_NAN = .TRUE.
+    ENDIF
 
   END FUNCTION NAN_DBLE
 !EOC
@@ -193,27 +203,13 @@ CONTAINS
 !------------------------------------------------------------------------------
 !BOC
 
-#if defined( LINUX_GFORTRAN )
-
-    IT_IS_A_FINITE = ((.not.IEEE_IS_NAN(VALUE)) .and. &
-                      (VALUE.lt.HUGE(1.0e0)) .and. &
-                      (VALUE.gt.(-1.0e0*HUGE(1.0e0))))
-
-#elif defined( LINUX_IFORT )
-
-    ! Local variables (parameters copied from "fordef.for")
-    INTEGER, PARAMETER :: SNAN=0, QNAN=1, POS_INF=2, NEG_INF=3
-    INTEGER            :: FPC
-
-    ! Get the floating point type class for VALUE
-    FPC            = FP_CLASS( VALUE )
-
-    ! VALUE is infinite if it is either +Inf or -Inf
-    ! Also flag an error if VALUE is a signaling or quiet NaN
-    IT_IS_A_FINITE = ( FPC /= POS_INF .and. FPC /= NEG_INF .and. &
-                       FPC /= SNAN    .and. FPC /= QNAN          )
-
-#endif
+    IF (IEEE_SUPPORT_NAN( VALUE ) .AND. IEEE_SUPPORT_INF( VALUE )) THEN
+      IT_IS_A_FINITE = IEEE_IS_FINITE( VALUE )
+    ELSE
+      ! Defaults to false to always throw
+      ! Todo: maybe print an error message
+      IT_IS_A_FINITE = .FALSE.
+    END IF
 
   END FUNCTION FINITE_FLOAT
 !EOC
@@ -246,27 +242,13 @@ CONTAINS
 !------------------------------------------------------------------------------
 !BOC
 
-#if   defined( LINUX_GFORTRAN )
-
-    IT_IS_A_FINITE = ((.not.IEEE_IS_NAN(VALUE)) .and. &
-                      (VALUE.lt.HUGE(1.d0)) .and. &
-                      (VALUE.gt.(-1.0d0*HUGE(1.d0))))
-
-#elif defined( LINUX_IFORT )
-
-    ! Local variables (parameters copied from "fordef.for")
-    INTEGER, PARAMETER :: SNAN=0, QNAN=1, POS_INF=2, NEG_INF=3
-    INTEGER            :: FPC
-
-    ! Get the floating point type class for VALUE
-    FPC            = FP_CLASS( VALUE )
-
-    ! VALUE is infinite if it is either +Inf or -Inf
-    ! Also flag an error if VALUE is a signaling or quiet NaN
-    IT_IS_A_FINITE = ( FPC /= POS_INF .and. FPC /= NEG_INF .and. &
-                       FPC /= SNAN    .and. FPC /= QNAN          )
-
-#endif
+    IF (IEEE_SUPPORT_NAN( VALUE ) .AND. IEEE_SUPPORT_INF( VALUE )) THEN
+      IT_IS_A_FINITE = IEEE_IS_FINITE( VALUE )
+    ELSE
+      ! Defaults to false to always throw
+      ! Todo: maybe print an error message
+      IT_IS_A_FINITE = .FALSE.
+    END IF
 
   END FUNCTION FINITE_DBLE
 !EOC
