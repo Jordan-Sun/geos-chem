@@ -2,6 +2,22 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.1343546.svg)](https://doi.org/10.5281/zenodo.1343546)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/geoschem/geos-chem/blob/master/LICENSE.txt)
 
+## Modifications
+
+This branch contains the __Hierarchical Shared Memory__ implementation for version 14.5.2, please follow [this link](https://github.com/Daisy0419/geos-chem/tree/shared_memory) for the implementation for the latest version.
+To compile this version of __Hierarchical Shared Memory__, please:
+1. Clone the source code using the following script adapted from [GCHP download instructions](https://gchp.readthedocs.io/en/14.5.2/user-guide/downloading.html).
+```Bash
+git clone https://github.com/geoschem/GCHP.git GCHP
+cd GCHP
+git checkout tags/14.5.2
+git submodule set-url src/GCHP_GridComp/GEOSChem_GridComp/geos-chem https://github.com/Jordan-Sun/geos-chem.git
+git submodule update --init --remote
+```
+2. Compile the code following the [GCHP compilation instructions](https://gchp.readthedocs.io/en/14.5.2/user-guide/compiling.html).
+
+For other implementations, please see [Simulated-Chem](https://github.com/Jordan-Sun/simulated-chem/tree/refactor/v3) for instructions.
+
 ## Description
 
 This repository contains the __GEOS-Chem science codebase__.  Included in this repository are:
