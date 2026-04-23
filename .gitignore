@@ -27,3 +27,4 @@ build_*/
 core.*
 *.exe
 .DS_Store
+assignment.csv
