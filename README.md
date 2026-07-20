@@ -1,5 +1,5 @@
 [![Release](https://img.shields.io/github/v/release/geoschem/geos-chem?label=Latest%20Release)](http://wiki.geos-chem.org/GEOS-Chem_versions)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.1343546.svg)](https://doi.org/10.5281/zenodo.1343546)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21462203.svg)](https://doi.org/10.5281/zenodo.21462203)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/geoschem/geos-chem/blob/master/LICENSE.txt)
 
 ## Modifications
